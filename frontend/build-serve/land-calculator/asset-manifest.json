@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/land-calculator/static/css/main.e6c13ad2.css",
+    "main.js": "/land-calculator/static/js/main.843d4213.js",
+    "static/js/453.d855a71b.chunk.js": "/land-calculator/static/js/453.d855a71b.chunk.js",
+    "index.html": "/land-calculator/index.html",
+    "main.e6c13ad2.css.map": "/land-calculator/static/css/main.e6c13ad2.css.map",
+    "main.843d4213.js.map": "/land-calculator/static/js/main.843d4213.js.map",
+    "453.d855a71b.chunk.js.map": "/land-calculator/static/js/453.d855a71b.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.843d4213.js"
+  ]
+}

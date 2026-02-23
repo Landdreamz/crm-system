@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Land Calculator</title>
+    <style>
+        .calculator { margin: 50px; font-family: Arial, sans-serif; }
+        .input-field { margin: 10px 0; }
+        .button { margin: 5px; padding: 5px 10px; }
+        .error { color: red; }
+        .result { color: green; }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h2>Land Calculator</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="input-field">
+                <label>Acres:</label>
+                <input type="number" step="any" name="acres" required>
+            </div>
+            <div class="input-field">
+                <label>Base Value ($):</label>
+                <input type="number" step="any" name="base_value" required>
+            </div>
+            <button class="button" type="submit">Calculate</button>
+        </form>
+        {% if result %}
+            <h3>Results</h3>
+            <p class="result">Total Acres: {{ result.total_acres|floatformat:4 }}</p>
+            <p class="result">Total Value: ${{ result.total_value|floatformat:2 }}</p>
+            <p class="result">Avg Value/Acre: ${{ result.avg_value_per_acre|floatformat:2 }}</p>
+        {% endif %}
+        {% if errors %}
+            <h3>Errors</h3>
+            {% for error in errors %}
+                <p class="error">{{ error }}</p>
+            {% endfor %}
+        {% endif %}
+    </div>
+</body>
+</html> 

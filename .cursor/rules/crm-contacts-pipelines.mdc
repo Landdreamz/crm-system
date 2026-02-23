@@ -1,0 +1,20 @@
+---
+description: CRM contact and pipeline rules: one pipeline/stage per contact per CRM; multi-CRM from Opportunities
+globs: frontend/src/features/dashboard/**/*
+alwaysApply: false
+---
+
+# CRM Contacts and Pipelines
+
+## One pipeline and stage per contact (within a single CRM)
+
+- Within a **single CRM**, a contact has exactly **one pipeline** and **one stage** at a time.
+- A contact card must not appear in multiple pipelines or multiple stages within that CRM.
+- Use `Contact.pipeline` (or the current pipeline context) and `Contact.pipelineStages[currentPipelineId]` (or `Contact.pipelineStage`) as the single source of truth for that CRM.
+- When moving a contact between stages or pipelines, update that single assignment; do not duplicate the contact across pipelines/stages.
+
+## Multiple CRMs per contact (Opportunities)
+
+- A contact may **exist in more than one CRM** (e.g. ACQ CRM and Dispo CRM). Use case: ACQ = acquire properties, Dispo = dispose them; the same person can be tracked in both.
+- This is managed from the **Opportunities section** (Pipeline Management): "Add to another CRM" / "Also in: [CRM name]".
+- Store which other CRMs the contact exists in via `Contact.alsoInCrmIds` (e.g. `['dispo']` when viewing in ACQ). When adding a contact to another CRM, create a copy in that CRM’s contact list and set `alsoInCrmIds` on both copies so the link is visible in the UI.
