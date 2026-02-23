@@ -2,6 +2,8 @@
 
 Dashboard CRM with contacts, pipeline management (ACQ / Dispo), and calculators.
 
+**Live app:** [https://landdreamz.github.io/crm-system/](https://landdreamz.github.io/crm-system/)
+
 ## Structure
 
 - **frontend/** — React (TypeScript) dashboard: contacts, pipelines, calendar, settings, dark mode

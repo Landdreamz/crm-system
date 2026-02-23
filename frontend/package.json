@@ -2,7 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://landdreamz.github.io/land-calculator",
+  "homepage": "https://landdreamz.github.io/crm-system",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -37,7 +37,8 @@
     "serve": "npx serve -s build -l 3000",
     "serve:local": "npm run build:local && npx serve -s build -l 3001",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "deploy": "npm run build && gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
@@ -60,5 +61,8 @@
   "overrides": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.0.0"
   }
 }

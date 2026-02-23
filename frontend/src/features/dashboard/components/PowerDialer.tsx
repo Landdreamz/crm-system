@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -18,6 +18,7 @@ import {
   TextField,
   Tooltip,
   LinearProgress,
+  Alert,
 } from '@mui/material';
 import {
   Phone as PhoneIcon,
@@ -47,13 +48,25 @@ import {
   Cell,
 } from 'recharts';
 
-interface Contact {
+/** Normalize to E.164 for Twilio (digits only, leading +). */
+function toE164(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+  return digits ? '+' + digits : '';
+}
+
+interface DialerContact {
   id: number;
   name: string;
   phone: string;
-  status: 'pending' | 'completed' | 'failed' | 'scheduled';
+  status?: 'pending' | 'completed' | 'failed' | 'scheduled';
   notes?: string;
   lastCall?: Date;
+}
+
+interface Contact extends DialerContact {
+  status: 'pending' | 'completed' | 'failed' | 'scheduled';
 }
 
 interface CallStats {
@@ -139,21 +152,127 @@ const getStatusColor = (status: Contact['status']) => {
   }
 };
 
-const PowerDialer: React.FC = () => {
-  const [activeCall, setActiveCall] = useState<Contact | null>(null);
+const TWILIO_SDK_URL = 'https://sdk.twilio.com/js/client/release/1.14.0/twilio.min.js';
+const DEFAULT_TWILIO_API = 'http://localhost:8000';
+
+declare global {
+  interface Window {
+    Twilio?: {
+      Device: new (token: string) => TwilioDevice;
+    };
+  }
+}
+interface TwilioDevice {
+  connect: (params?: { params?: Record<string, string> }) => void;
+  disconnect: () => void;
+  on: (event: string, handler: () => void) => void;
+  destroy: () => void;
+}
+
+interface PowerDialerProps {
+  /** CRM contacts to show in the dialer; when not provided, sample data is used. */
+  contacts?: { id: number; name: string; phone: string }[];
+}
+
+const PowerDialer: React.FC<PowerDialerProps> = ({ contacts: crmContacts }) => {
+  const [activeCall, setActiveCall] = useState<DialerContact | null>(null);
   const [isDialing, setIsDialing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [twilioReady, setTwilioReady] = useState(false);
+  const [twilioError, setTwilioError] = useState<string | null>(null);
+  const deviceRef = useRef<TwilioDevice | null>(null);
 
-  const handleStartCall = (contact: Contact) => {
+  const apiBase = typeof process !== 'undefined' && process.env.REACT_APP_TWILIO_API_URL
+    ? process.env.REACT_APP_TWILIO_API_URL
+    : DEFAULT_TWILIO_API;
+
+  const displayContacts: Contact[] = crmContacts?.length
+    ? crmContacts.map((c) => ({ id: c.id, name: c.name, phone: c.phone, status: 'pending' as const }))
+    : sampleContacts;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.Twilio) {
+      setTwilioReady(!!window.Twilio);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = TWILIO_SDK_URL;
+    script.async = true;
+    script.onload = () => setTwilioReady(!!window.Twilio);
+    script.onerror = () => setTwilioError('Failed to load Twilio SDK');
+    document.body.appendChild(script);
+    return () => { script.remove(); };
+  }, []);
+
+  const handleStartCall = async (contact: DialerContact) => {
+    const num = toE164(contact.phone);
+    if (!num) {
+      setTwilioError('No valid phone number');
+      return;
+    }
+    setTwilioError(null);
     setActiveCall(contact);
     setIsDialing(true);
-    // Simulate call connection
-    setTimeout(() => {
+    try {
+      const r = await fetch(`${apiBase}/api/twilio/token/`);
+      let data: { token?: string; error?: string } = {};
+      try {
+        data = await r.json();
+      } catch {
+        setTwilioError(`Backend at ${apiBase} returned invalid JSON. Is the server running?`);
+        setIsDialing(false);
+        setActiveCall(null);
+        return;
+      }
+      if (!r.ok) {
+        setTwilioError(data.error || 'Could not get call token');
+        setIsDialing(false);
+        setActiveCall(null);
+        return;
+      }
+      const token = data.token;
+      if (!window.Twilio) {
+        setTwilioError('Twilio SDK not loaded');
+        setIsDialing(false);
+        setActiveCall(null);
+        return;
+      }
+      if (deviceRef.current) {
+        try { deviceRef.current.destroy(); } catch { /* ignore */ }
+        deviceRef.current = null;
+      }
+      const device = new window.Twilio.Device(token);
+      deviceRef.current = device;
+      device.on('connect', () => setIsDialing(false));
+      device.on('disconnect', () => {
+        setActiveCall(null);
+        setIsDialing(false);
+        if (deviceRef.current === device) deviceRef.current = null;
+      });
+      device.on('error', () => {
+        setTwilioError('Call failed');
+        setActiveCall(null);
+        setIsDialing(false);
+      });
+      device.connect({ params: { To: num } });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Connection failed';
+      const isNetwork = /failed|load failed|network|refused/i.test(msg);
+      setTwilioError(
+        isNetwork
+          ? `Cannot reach the backend at ${apiBase}. Start it with: cd backend && pip install -r requirements.txt && python manage.py runserver`
+          : msg
+      );
       setIsDialing(false);
-    }, 2000);
+      setActiveCall(null);
+    }
   };
 
   const handleEndCall = () => {
+    if (deviceRef.current) {
+      try { deviceRef.current.disconnect(); deviceRef.current.destroy(); } catch { /* ignore */ }
+      deviceRef.current = null;
+    }
     setActiveCall(null);
     setIsDialing(false);
   };
@@ -168,6 +287,9 @@ const PowerDialer: React.FC = () => {
         </Typography>
         <Typography variant="body1" color="text.secondary" paragraph>
           Efficiently manage and track your calls with automated dialing and call analytics.
+        </Typography>
+        <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
+          Calls use the backend at <strong>{apiBase}</strong>. Start the backend (see docs/TWILIO.md) and set Twilio env vars.
         </Typography>
 
         {/* Quick Stats */}
@@ -203,6 +325,12 @@ const PowerDialer: React.FC = () => {
             </CardContent>
           </Card>
         </Stack>
+
+        {twilioError && (
+          <Alert severity="warning" onClose={() => setTwilioError(null)} sx={{ mb: 2 }}>
+            {twilioError} — Ensure the backend is running and Twilio env vars are set (see docs/TWILIO.md).
+          </Alert>
+        )}
 
         {/* Active Call Section */}
         {activeCall && (
@@ -250,7 +378,9 @@ const PowerDialer: React.FC = () => {
             sx={{ mb: 2 }}
           />
           <List>
-            {sampleContacts.map((contact) => (
+            {displayContacts
+              .filter((c) => !searchText.trim() || c.name.toLowerCase().includes(searchText.toLowerCase()) || c.phone.includes(searchText))
+              .map((contact) => (
               <React.Fragment key={contact.id}>
                 <ListItem>
                   <ListItemIcon>

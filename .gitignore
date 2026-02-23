@@ -42,6 +42,10 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Database
+*.sqlite3
+db.sqlite3
+
 # Misc
 *.pyc
 __pycache__/

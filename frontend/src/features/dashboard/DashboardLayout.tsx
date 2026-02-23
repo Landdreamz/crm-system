@@ -189,7 +189,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
       case 'Automation & Workflows':
         return <AutomationWorkflows />;
       case 'Power Dialer':
-        return <PowerDialer />;
+        return <PowerDialer contacts={contacts} />;
       case 'Ask A.I':
         return <AskAI />;
       case 'Contacts':

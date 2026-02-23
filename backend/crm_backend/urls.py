@@ -16,7 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from api.views import twilio_token, twilio_voice
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/twilio/token/', twilio_token),
+    path('api/twilio/voice/', twilio_voice),
 ]
