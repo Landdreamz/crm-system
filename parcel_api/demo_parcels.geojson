@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "apn": "1144400040007",
+        "address": "123 Demo St, Houston, TX",
+        "owner": "Demo Parcel Owner",
+        "acres": 0.25,
+        "legal_desc": "Demo Lot 1",
+        "market_value": 85000,
+        "state": "TX",
+        "county": "Harris"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-95.36, 29.76], [-95.355, 29.76], [-95.355, 29.755], [-95.36, 29.755], [-95.36, 29.76]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "apn": "0280490000034",
+        "address": "3153 Chickering St, Houston, TX",
+        "owner": "Sample Owner",
+        "acres": 0.18,
+        "market_value": 120000,
+        "state": "TX",
+        "county": "Harris"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-95.365, 29.765], [-95.36, 29.765], [-95.36, 29.76], [-95.365, 29.76], [-95.365, 29.765]]]
+      }
+    }
+  ]
+}

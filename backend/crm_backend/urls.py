@@ -16,10 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from api.views import twilio_token, twilio_voice
+from api.views import root, twilio_token, twilio_voice, gohl_contacts, gohl_contact_refresh
 
 urlpatterns = [
+    path('', root),
     path('admin/', admin.site.urls),
     path('api/twilio/token/', twilio_token),
     path('api/twilio/voice/', twilio_voice),
+    path('api/gohl/contacts/', gohl_contacts),
+    path('api/gohl/contacts/refresh/', gohl_contact_refresh),
 ]

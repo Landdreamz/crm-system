@@ -1,0 +1,3 @@
+state,county,fips,parcel_layer_url,min_lon,min_lat,max_lon,max_lat
+TX,Harris,48201,https://gis.hctx.net/arcgis/rest/services/Property/Property/FeatureServer/0,-95.9,29.5,-95.0,30.2
+TX,Dallas,48113,https://gis.dallascounty.org/arcgis/rest/services/Public/DCAD/MapServer/0,-97.0,32.6,-96.5,33.0

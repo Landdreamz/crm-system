@@ -1,0 +1,6 @@
+# For crawl_county_parcels.py and run_crawl_all_counties.py
+requests>=2.28.0
+
+# For load_parcels_to_postgis.py
+psycopg2-binary>=2.9.0
+python-dotenv>=1.0.0

@@ -17,7 +17,7 @@ Connect your Twilio account so the **Power Dialer** in the CRM can place browser
 
 ## 2. Backend (Django) env vars
 
-In the backend project (or `.env` next to `manage.py`), set:
+Copy `backend/.env.example` to `backend/.env`, then fill in your values. The backend loads `backend/.env` automatically (python-dotenv). Or set them in your shell before running the server.
 
 ```bash
 # Required
@@ -54,7 +54,20 @@ So in the TwiML App, set:
 
 - **Voice Request URL:** `https://YOUR_BACKEND_HOST/api/twilio/voice/`
 
-For local development, expose your backend with a tunnel (e.g. ngrok) and use that HTTPS URL in the TwiML App.
+For local development, expose your backend with a tunnel and use that HTTPS URL in the TwiML App.
+
+**Quick tunnel (no install):** From the project root run:
+
+```bash
+npx --yes localtunnel --port 8000
+```
+
+Use the printed URL (e.g. `https://something.loca.lt`) as your backend host. Set TwiML App **Voice Request URL** to:
+
+`https://YOUR_TUNNEL_URL/api/twilio/voice/`
+
+(Replace `YOUR_TUNNEL_URL` with the host from the command, e.g. `fuzzy-ways-jog.loca.lt`.)  
+If Twilio gets an HTML “confirm” page instead of TwiML, use [ngrok](https://ngrok.com) instead (`ngrok http 8000`).
 
 ## 5. CORS
 

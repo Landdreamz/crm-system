@@ -231,6 +231,12 @@ const PowerDialer: React.FC<PowerDialerProps> = ({ contacts: crmContacts }) => {
         return;
       }
       const token = data.token;
+      if (!token) {
+        setTwilioError(data.error || 'No token in response');
+        setIsDialing(false);
+        setActiveCall(null);
+        return;
+      }
       if (!window.Twilio) {
         setTwilioError('Twilio SDK not loaded');
         setIsDialing(false);

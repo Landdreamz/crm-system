@@ -5,6 +5,10 @@ venv/
 **/venv/
 .venv/
 **/.venv/
+.venv-parcel/
+
+# Parcel crawl output (optional: remove to commit sample data)
+data/parcels/
 env/
 **/env/
 

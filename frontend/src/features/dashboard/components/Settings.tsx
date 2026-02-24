@@ -1,5 +1,12 @@
 import React from 'react';
-import { Box, Typography, Switch, FormControlLabel, Paper, Stack } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Switch,
+  FormControlLabel,
+  Paper,
+  Stack,
+} from '@mui/material';
 import { useThemeMode } from '../../../theme/ThemeModeContext';
 import { DarkMode as DarkModeIcon, LightMode as LightModeIcon } from '@mui/icons-material';
 

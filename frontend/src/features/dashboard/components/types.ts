@@ -88,6 +88,8 @@ export interface Contact {
   temperature?: string;
   /** Other CRM ids where this contact also exists (e.g. ["dispo"] when viewing in ACQ). Used for cross-CRM visibility (ACQ vs Dispo). */
   alsoInCrmIds?: string[];
+  /** GoHighLevel contact id; used to refresh contact data and messages from GHL. */
+  gohlId?: string;
 }
 
 export type NewContact = Omit<Contact, 'id'>; 

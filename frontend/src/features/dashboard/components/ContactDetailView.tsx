@@ -22,6 +22,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   CalendarMonth as CalendarMonthIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { Contact, Communication, Appointment, ContactTask } from './types';
 import PropertyMap from './PropertyMap';
@@ -49,10 +50,107 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
   const [quickEditDraft, setQuickEditDraft] = useState('');
   const [mapHeight, setMapHeight] = useState(260);
   const [centerMapOnAddress, setCenterMapOnAddress] = useState<string | null>(null);
+  const [refreshLoading, setRefreshLoading] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshSuccess, setRefreshSuccess] = useState(false);
   const resizeRef = useRef<{ startY: number; startMapH: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mapSectionRef = useRef<HTMLDivElement>(null);
 
-  const propertyAddressString = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
+  const apiBase = typeof process !== 'undefined' && process.env.REACT_APP_TWILIO_API_URL
+    ? process.env.REACT_APP_TWILIO_API_URL
+    : 'http://localhost:8000';
+
+  const handleRefreshFromGhl = async () => {
+    if (refreshLoading) return;
+    const gohlId = contact.gohlId;
+    const email = (contact.email || '').trim();
+    if (!gohlId && !email) {
+      setRefreshError('No GoHighLevel link (import from GHL first).');
+      return;
+    }
+    setRefreshError(null);
+    setRefreshSuccess(false);
+    setRefreshLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (gohlId) params.set('gohlId', gohlId);
+      else params.set('email', email);
+      const r = await fetch(`${apiBase}/api/gohl/contacts/refresh/?${params.toString()}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setRefreshError(data.error || `Refresh failed (${r.status})`);
+        return;
+      }
+      const fromGhl = data.contact as Record<string, unknown> | undefined;
+      const fromGhlComms = (data.communications || []) as Array<{ date: string; direction: string; body: string }>;
+      if (fromGhl) {
+        const updated: Contact = {
+          ...contact,
+          name: (fromGhl.name as string) ?? contact.name,
+          firstName: (fromGhl.firstName as string) ?? contact.firstName,
+          lastName: (fromGhl.lastName as string) ?? contact.lastName,
+          email: (fromGhl.email as string) ?? contact.email,
+          phone: (fromGhl.phone as string) ?? contact.phone,
+          company: (fromGhl.company as string) ?? contact.company,
+          fullAddress: (fromGhl.fullAddress as string) ?? contact.fullAddress,
+          address: (fromGhl.address as string) ?? contact.address,
+          city: (fromGhl.city as string) ?? contact.city,
+          state: (fromGhl.state as string) ?? contact.state,
+          zip: (fromGhl.zip as string) ?? contact.zip,
+          county: (fromGhl.county as string) ?? contact.county,
+          apn: (fromGhl.apn as string) ?? contact.apn,
+          lotSizeSqft: (fromGhl.lotSizeSqft as string) ?? contact.lotSizeSqft,
+          acres: (fromGhl.acres as string) ?? contact.acres,
+          estimatedValue: (fromGhl.estimatedValue as string) ?? contact.estimatedValue,
+          propertyType: (fromGhl.propertyType as string) ?? contact.propertyType,
+          subdivision: (fromGhl.subdivision as string) ?? contact.subdivision,
+          totalAssessedValue: (fromGhl.totalAssessedValue as string) ?? contact.totalAssessedValue,
+          latitude: (fromGhl.latitude as string) ?? contact.latitude,
+          longitude: (fromGhl.longitude as string) ?? contact.longitude,
+          gohlId: (fromGhl.gohlId as string) ?? contact.gohlId,
+        };
+        const existingComms = contact.communications ?? [];
+        const existingIds = new Set(existingComms.map((c) => c.id));
+        const newComms: Communication[] = fromGhlComms.map((msg, i) => ({
+          id: `ghl-${msg.date}-${i}`,
+          date: msg.date,
+          direction: (msg.direction === 'out' ? 'out' : 'in') as 'out' | 'in',
+          body: msg.body,
+        })).filter((c) => !existingIds.has(c.id));
+        const mergedComms = [...existingComms];
+        for (const c of newComms) {
+          if (mergedComms.some((x) => x.date === c.date && x.body === c.body)) continue;
+          mergedComms.push(c);
+        }
+        mergedComms.sort((a, b) => a.date.localeCompare(b.date));
+        onUpdateContact({ ...updated, communications: mergedComms });
+        setRefreshSuccess(true);
+        setTimeout(() => setRefreshSuccess(false), 2000);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Refresh failed';
+      const isNetwork = /failed|load failed|network|refused|cors/i.test(msg);
+      setRefreshError(isNetwork ? `Cannot reach backend. Is it running at ${apiBase}?` : msg);
+    } finally {
+      setRefreshLoading(false);
+    }
+  };
+
+  const propertyAddressString = (contact.fullAddress && contact.fullAddress.trim())
+    ? contact.fullAddress.trim()
+    : [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
+
+  // Geocoder-friendly format: "street, city, state zip" (zip helps US Census accuracy)
+  const stateZip = [contact.state, contact.zip].filter(Boolean).join(' ').trim();
+  const geocodeAddressString = [contact.address, contact.city, stateZip].filter(Boolean).join(', ') || propertyAddressString;
+
+  // When "View on map" is clicked, scroll the map into view so the user sees the result
+  useEffect(() => {
+    if (centerMapOnAddress && mapSectionRef.current) {
+      mapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [centerMapOnAddress]);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -209,15 +307,34 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
         <Paper sx={{ p: 2, overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
             <Box>
-              <Typography variant="h6" gutterBottom>
-                {contact.name}
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.5 }}>
+                <Typography variant="h6" component="span">
+                  {contact.name}
+                </Typography>
+                {(contact.gohlId || contact.email) && (
+                  <IconButton
+                    size="small"
+                    onClick={handleRefreshFromGhl}
+                    disabled={refreshLoading}
+                    aria-label="Refresh from GoHighLevel"
+                    title="Refresh from GoHighLevel"
+                  >
+                    <RefreshIcon fontSize="small" sx={{ opacity: refreshLoading ? 0.6 : 1 }} />
+                  </IconButton>
+                )}
+              </Stack>
               <Chip
                 label={contact.status === 'Lead' ? 'New Lead' : contact.status}
                 size="small"
                 color={contact.status === 'Active' ? 'success' : contact.status === 'Lead' ? 'primary' : 'default'}
                 variant="outlined"
               />
+              {refreshError && (
+                <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>{refreshError}</Typography>
+              )}
+              {refreshSuccess && (
+                <Typography variant="caption" color="success" sx={{ display: 'block', mt: 0.5 }}>Refreshed from GoHighLevel</Typography>
+              )}
             </Box>
             <IconButton color="primary" size="small" onClick={() => onEdit(contact)} aria-label="Edit contact">
               <EditIcon />
@@ -316,15 +433,19 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ pt: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">Property</Typography>
               {propertyAddressString && (
-                <Typography
-                  component="button"
-                  type="button"
-                  variant="caption"
-                  onClick={() => setCenterMapOnAddress(propertyAddressString)}
-                  sx={{ color: 'primary.main', cursor: 'pointer', border: 'none', background: 'none', font: 'inherit', '&:hover': { textDecoration: 'underline' } }}
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCenterMapOnAddress(geocodeAddressString);
+                    setTimeout(() => mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
+                  }}
+                  sx={{ minWidth: 0, p: 0, textTransform: 'none', fontSize: '0.75rem', color: 'primary.main' }}
                 >
                   View on map
-                </Typography>
+                </Button>
               )}
             </Stack>
             {[
@@ -359,7 +480,7 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                     variant="body2"
                     component={clickableAddress ? 'button' : 'span'}
                     type={clickableAddress ? 'button' : undefined}
-                    onClick={clickableAddress ? () => setCenterMapOnAddress(propertyAddressString) : undefined}
+                    onClick={clickableAddress ? () => setCenterMapOnAddress(geocodeAddressString) : undefined}
                     sx={{
                       ...(clickableAddress && {
                         border: 'none', background: 'none', padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer',
@@ -433,8 +554,9 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
         </Paper>
 
         {/* Center: Map + Communications (resizable) */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: 'calc(100vh - 180px)' }}>
-          <Paper sx={{ p: 2, overflow: 'hidden', flexShrink: 0, height: mapHeight }}>
+        <Box ref={mapSectionRef} sx={{ display: 'flex', flexDirection: 'column', minWidth: { md: 360 }, minHeight: 400, height: 'calc(100vh - 180px)' }}>
+          <Paper sx={{ p: 2, overflow: 'hidden', flexShrink: 0, height: mapHeight, minHeight: 260 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Map</Typography>
             <PropertyMap
               contact={contact}
               height={mapHeight - 32}

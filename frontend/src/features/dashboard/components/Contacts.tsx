@@ -39,6 +39,7 @@ import {
   ViewColumn as ViewColumnIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
+  CloudDownload as CloudDownloadIcon,
 } from '@mui/icons-material';
 import AddContactDialog from './AddContactDialog';
 import ContactDetailView from './ContactDetailView';
@@ -407,8 +408,174 @@ const Contacts: React.FC<ContactsProps> = ({
   const [cellEditDraft, setCellEditDraft] = useState('');
   const [sortBy, setSortBy] = useState<ColumnId | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [gohlImporting, setGohlImporting] = useState(false);
+  const [gohlImportError, setGohlImportError] = useState<string | null>(null);
+  const [gohlPickerOpen, setGohlPickerOpen] = useState(false);
+  const [gohlContacts, setGohlContacts] = useState<Record<string, unknown>[]>([]);
+  const [gohlSelected, setGohlSelected] = useState<Set<number>>(new Set());
+  const [searchGohl, setSearchGohl] = useState(false);
+  const [gohlSearchResults, setGohlSearchResults] = useState<Record<string, unknown>[]>([]);
+  const [gohlSearchLoading, setGohlSearchLoading] = useState(false);
+  const [gohlSearchSelected, setGohlSearchSelected] = useState<Set<number>>(new Set());
 
   const isDateColumn = (id: ColumnId) => id === 'lastContact' || id === 'salesDate';
+
+  const apiBase = typeof process !== 'undefined' && process.env.REACT_APP_TWILIO_API_URL
+    ? process.env.REACT_APP_TWILIO_API_URL
+    : 'http://localhost:8000';
+
+  const openGohlPicker = async () => {
+    setGohlImportError(null);
+    setGohlImporting(true);
+    setGohlPickerOpen(false);
+    try {
+      const r = await fetch(`${apiBase}/api/gohl/contacts/`);
+      let data: { contacts?: unknown[]; error?: string } = {};
+      try {
+        data = await r.json();
+      } catch {
+        setGohlImportError(`Backend at ${apiBase} returned invalid JSON. Is the server running?`);
+        return;
+      }
+      if (!r.ok) {
+        setGohlImportError(data.error || `Import failed (${r.status})`);
+        return;
+      }
+      const raw = (data.contacts ?? []).filter((c): c is Record<string, unknown> => c != null && typeof c === 'object');
+      if (raw.length === 0) {
+        setGohlImportError('No contacts returned from GoHighLevel');
+        return;
+      }
+      setGohlContacts(raw);
+      setGohlSelected(new Set());
+      setGohlPickerOpen(true);
+      setGohlImportError(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Import failed';
+      const isNetwork = /failed|load failed|network|refused|cors/i.test(msg);
+      setGohlImportError(
+        isNetwork
+          ? `Cannot reach the backend at ${apiBase}. Start it with: cd backend && ./venv/bin/python manage.py runserver 0.0.0.0:8000`
+          : msg
+      );
+    } finally {
+      setGohlImporting(false);
+    }
+  };
+
+  const toggleGohlSelected = (index: number) => {
+    setGohlSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!searchGohl || searchTerm.trim().length < 2) {
+      setGohlSearchResults([]);
+      return;
+    }
+    const term = searchTerm.trim();
+    const t = setTimeout(async () => {
+      setGohlSearchLoading(true);
+      try {
+        const r = await fetch(`${apiBase}/api/gohl/contacts/?q=${encodeURIComponent(term)}`);
+        const data = await r.json();
+        if (r.ok && Array.isArray(data.contacts)) {
+          setGohlSearchResults(data.contacts);
+          setGohlSearchSelected(new Set());
+        } else {
+          setGohlSearchResults([]);
+          setGohlSearchSelected(new Set());
+        }
+      } catch {
+        setGohlSearchResults([]);
+      } finally {
+        setGohlSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchGohl, searchTerm, apiBase]);
+
+  const toggleGohlSearchSelected = (i: number) => {
+    setGohlSearchSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  const mapGohlToContact = (c: Record<string, unknown>, nextId: number): Contact => {
+    const name = (c.name ?? [c.firstName, c.lastName].filter(Boolean).join(' ')) as string;
+    const email = String(c.email ?? '').trim();
+    return {
+      id: nextId,
+      name: (name && String(name).trim()) || 'Unknown',
+      firstName: (c.firstName as string) ?? undefined,
+      lastName: (c.lastName as string) ?? undefined,
+      email: email || '—',
+      phone: String(c.phone ?? '').trim() || '—',
+      company: String(c.company ?? '').trim() || '',
+      status: 'Lead',
+      lastContact: (c.lastContact as string) ?? new Date().toISOString().slice(0, 10),
+      fullAddress: (c.fullAddress as string) ?? undefined,
+      address: (c.address as string) ?? undefined,
+      city: (c.city as string) ?? undefined,
+      state: (c.state as string) ?? undefined,
+      zip: (c.zip as string) ?? undefined,
+      county: (c.county as string) ?? undefined,
+      apn: (c.apn as string) ?? undefined,
+      lotSizeSqft: (c.lotSizeSqft as string) ?? undefined,
+      acres: (c.acres as string) ?? undefined,
+      estimatedValue: (c.estimatedValue as string) ?? undefined,
+      propertyType: (c.propertyType as string) ?? undefined,
+      subdivision: (c.subdivision as string) ?? undefined,
+      totalAssessedValue: (c.totalAssessedValue as string) ?? undefined,
+      latitude: (c.latitude as string) ?? undefined,
+      longitude: (c.longitude as string) ?? undefined,
+      dataSource: 'GoHighLevel',
+      gohlId: (c.gohlId ?? c._gohlId) as string | undefined,
+    };
+  };
+
+  const importSelectedGohlSearchContacts = () => {
+    const existingEmails = new Set(contacts.map((x) => x.email?.toLowerCase()).filter(Boolean));
+    const maxId = Math.max(0, ...contacts.map((x) => x.id));
+    let nextId = maxId + 1;
+    const toAdd: Contact[] = [];
+    for (const i of Array.from(gohlSearchSelected)) {
+      const c = gohlSearchResults[i];
+      if (!c) continue;
+      const email = String(c.email ?? '').trim();
+      if (email && existingEmails.has(email.toLowerCase())) continue;
+      toAdd.push(mapGohlToContact(c, nextId++));
+      if (email) existingEmails.add(email.toLowerCase());
+    }
+    setContacts((prev) => [...prev, ...toAdd]);
+    setGohlSearchSelected(new Set());
+  };
+
+  const importSelectedGohlContacts = () => {
+    const existingEmails = new Set(contacts.map((c) => c.email?.toLowerCase()).filter(Boolean));
+    const maxId = Math.max(0, ...contacts.map((c) => c.id));
+    let nextId = maxId + 1;
+    const toAdd: Contact[] = [];
+    for (const i of Array.from(gohlSelected)) {
+      const c = gohlContacts[i];
+      if (!c) continue;
+      const email = (String(c.email ?? '').trim());
+      if (email && existingEmails.has(email.toLowerCase())) continue;
+      toAdd.push(mapGohlToContact(c, nextId++));
+      if (email) existingEmails.add(email.toLowerCase());
+    }
+    setContacts((prev) => [...prev, ...toAdd]);
+    setGohlPickerOpen(false);
+    setGohlContacts([]);
+    setGohlSelected(new Set());
+  };
 
   const openCellEdit = (contact: Contact, columnId: ColumnId, e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
@@ -684,9 +851,24 @@ const Contacts: React.FC<ContactsProps> = ({
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ mb: 2 }}>
           <Typography variant="h5">Contacts</Typography>
           <Stack direction="column" spacing={1} alignItems="flex-end">
-            <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => setIsAddDialogOpen(true)}>
-              Add contact
-            </Button>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => setIsAddDialogOpen(true)}>
+                Add contact
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<CloudDownloadIcon />}
+                onClick={openGohlPicker}
+                disabled={gohlImporting}
+              >
+                {gohlImporting ? 'Loading…' : 'Import from GoHighLevel'}
+              </Button>
+            </Stack>
+            {gohlImportError && (
+              <Typography variant="caption" color="error" sx={{ maxWidth: 320 }}>
+                {gohlImportError}
+              </Typography>
+            )}
             <Button
               variant="outlined"
               size="small"
@@ -724,22 +906,46 @@ const Contacts: React.FC<ContactsProps> = ({
           </Stack>
         </Stack>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <TextField
-            fullWidth
-            size="small"
-            variant="outlined"
-            placeholder="Search contacts..."
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ maxWidth: 320 }}
-          />
+          <Stack direction="column" spacing={1} sx={{ maxWidth: 420 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <TextField
+                fullWidth
+                size="small"
+                variant="outlined"
+                placeholder="Search contacts..."
+                value={searchTerm}
+                onChange={handleSearch}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ maxWidth: 320 }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={searchGohl}
+                    onChange={(e) => setSearchGohl(e.target.checked)}
+                  />
+                }
+                label={<Typography variant="body2">Search GoHighLevel</Typography>}
+              />
+            </Stack>
+            {searchGohl && gohlSearchResults.length > 0 && gohlSearchSelected.size > 0 && (
+              <Button
+                size="small"
+                variant="contained"
+                onClick={importSelectedGohlSearchContacts}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                Import {gohlSearchSelected.size === 1 ? '1 contact' : `${gohlSearchSelected.size} contacts`}
+              </Button>
+            )}
+          </Stack>
           <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
             <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>Status:</Typography>
             {(['All', 'Lead', 'Active', 'Inactive'] as const).map((status) => (
@@ -755,6 +961,44 @@ const Contacts: React.FC<ContactsProps> = ({
             ))}
           </Stack>
         </Stack>
+        {searchGohl && (gohlSearchResults.length > 0 || gohlSearchLoading) && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              From GoHighLevel {gohlSearchLoading && '(searching…)'}
+            </Typography>
+            {gohlSearchResults.length > 0 && (
+              <Stack spacing={0.5}>
+                {gohlSearchResults.map((c, i) => {
+                  const name = (c.name ?? [c.firstName, c.lastName].filter(Boolean).join(' ')) as string;
+                  const displayName = (name && String(name).trim()) || 'Unknown';
+                  const email = String(c.email ?? '').trim();
+                  const phone = String(c.phone ?? '').trim();
+                  const alreadyExists = email
+                    ? contacts.some((x) => x.email?.toLowerCase() === email.toLowerCase())
+                    : false;
+                  return (
+                    <Stack key={i} direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                      <Checkbox
+                        size="small"
+                        checked={gohlSearchSelected.has(i)}
+                        onChange={() => toggleGohlSearchSelected(i)}
+                        disabled={alreadyExists}
+                      />
+                      <Typography variant="body2" sx={{ flex: 1, minWidth: 120 }}>
+                        {displayName}
+                        {email && ` · ${email}`}
+                        {phone && ` · ${phone}`}
+                      </Typography>
+                      {alreadyExists && (
+                        <Chip size="small" label="In CRM" color="success" variant="outlined" />
+                      )}
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            )}
+          </Box>
+        )}
         <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
           <Table stickyHeader size="small">
             <TableHead>
@@ -1405,6 +1649,52 @@ const Contacts: React.FC<ContactsProps> = ({
             onClick={() => deleteTarget && handleDeleteContact(deleteTarget)}
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={gohlPickerOpen} onClose={() => setGohlPickerOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Select contacts to import</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Choose one or more leads from GoHighLevel. Only selected contacts will be added to your CRM.
+          </DialogContentText>
+          <Stack spacing={0.5} sx={{ maxHeight: 360, overflowY: 'auto' }}>
+            {gohlContacts.map((c, i) => {
+              const name = (c.name ?? [c.firstName, c.lastName].filter(Boolean).join(' ')) as string;
+              const displayName = (name && String(name).trim()) || 'Unknown';
+              const email = String(c.email ?? '').trim();
+              const phone = String(c.phone ?? '').trim();
+              return (
+                <FormControlLabel
+                  key={i}
+                  control={
+                    <Checkbox
+                      checked={gohlSelected.has(i)}
+                      onChange={() => toggleGohlSelected(i)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      {displayName}
+                      {email && ` · ${email}`}
+                      {phone && ` · ${phone}`}
+                    </Typography>
+                  }
+                />
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGohlPickerOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={importSelectedGohlContacts}
+            disabled={gohlSelected.size === 0}
+          >
+            Import {gohlSelected.size === 0 ? 'selected' : gohlSelected.size === 1 ? '1 contact' : `${gohlSelected.size} contacts`}
           </Button>
         </DialogActions>
       </Dialog>

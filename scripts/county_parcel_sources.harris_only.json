@@ -1,0 +1,9 @@
+[
+  {
+    "state": "TX",
+    "county": "Harris",
+    "fips": "48201",
+    "parcel_layer_url": "https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0",
+    "bbox": [-95.9, 29.5, -95.0, 30.2]
+  }
+]

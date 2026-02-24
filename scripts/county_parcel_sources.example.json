@@ -1,0 +1,16 @@
+[
+  {
+    "state": "TX",
+    "county": "Harris",
+    "fips": "48201",
+    "parcel_layer_url": "https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0",
+    "bbox": [-95.9, 29.5, -95.0, 30.2]
+  },
+  {
+    "state": "TX",
+    "county": "Dallas",
+    "fips": "48113",
+    "parcel_layer_url": "https://gis.dallascounty.org/arcgis/rest/services/Public/DCAD/MapServer/0",
+    "bbox": [-97.0, 32.6, -96.5, 33.0]
+  }
+]
