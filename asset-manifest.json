@@ -1,17 +1,17 @@
 {
   "files": {
-    "main.css": "/crm-system/static/css/main.323d7611.css",
-    "main.js": "/crm-system/static/js/main.b7a28451.js",
-    "static/js/0.b4521d42.chunk.js": "/crm-system/static/js/0.b4521d42.chunk.js",
-    "static/js/453.ca0395ca.chunk.js": "/crm-system/static/js/453.ca0395ca.chunk.js",
-    "index.html": "/crm-system/index.html",
-    "main.323d7611.css.map": "/crm-system/static/css/main.323d7611.css.map",
-    "main.b7a28451.js.map": "/crm-system/static/js/main.b7a28451.js.map",
-    "0.b4521d42.chunk.js.map": "/crm-system/static/js/0.b4521d42.chunk.js.map",
-    "453.ca0395ca.chunk.js.map": "/crm-system/static/js/453.ca0395ca.chunk.js.map"
+    "main.css": "./static/css/main.323d7611.css",
+    "main.js": "./static/js/main.5cc1279c.js",
+    "static/js/0.b4521d42.chunk.js": "./static/js/0.b4521d42.chunk.js",
+    "static/js/453.ca0395ca.chunk.js": "./static/js/453.ca0395ca.chunk.js",
+    "index.html": "./index.html",
+    "main.323d7611.css.map": "./static/css/main.323d7611.css.map",
+    "main.5cc1279c.js.map": "./static/js/main.5cc1279c.js.map",
+    "0.b4521d42.chunk.js.map": "./static/js/0.b4521d42.chunk.js.map",
+    "453.ca0395ca.chunk.js.map": "./static/js/453.ca0395ca.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.323d7611.css",
-    "static/js/main.b7a28451.js"
+    "static/js/main.5cc1279c.js"
   ]
 }
