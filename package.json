@@ -1,0 +1,17 @@
+{
+  "name": "crm-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM dashboard with Land Calculator",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm start",
+    "serve": "node scripts/serve-local.js",
+    "refresh": "npm run build && node -e \"require('fs').cpSync('frontend/build','crm-system',{recursive:true})\"",
+    "deploy": "node scripts/prepare-gh-pages.js && npx gh-pages -d gh-pages-publish -r https://github.com/Landdreamz/crm-system.git",
+    "deploy:build": "npm run build && npm run deploy"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  }
+}

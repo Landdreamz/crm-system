@@ -1,0 +1,30 @@
+node_modules/
+gh-pages-publish/
+crm-system/
+# Env and secrets
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+# Build output
+frontend/build/
+# OS and local
+.DS_Store
+.venv-parcel/
+__pycache__/
+*.pyc
+# Python venvs
+venv/
+.venv/
+**/venv/
+**/.venv/
+# Root static build artifacts (if any)
+static/
+# Test/scratch folders (optional - uncomment if you don't want to push these)
+# calculator-test/
+# land-calculator-test/
+# land_calc/
+# simple-calc/
+# parcel_api/
+# data/
