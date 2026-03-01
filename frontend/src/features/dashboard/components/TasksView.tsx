@@ -514,7 +514,7 @@ const TasksView: React.FC<TasksViewProps> = ({ contacts, onOpenContact, onUpdate
                     <Typography variant="body2">
                       {(() => {
                         const raw =
-                          (item.task.dueTime ?? (item.task as Record<string, unknown>).dueTime) ||
+                          (item.task.dueTime ?? (item.task as unknown as Record<string, unknown>).dueTime) ||
                           savedDueTimeByTaskId[item.task.id] ||
                           '';
                         if (!raw || typeof raw !== 'string') return '—';
