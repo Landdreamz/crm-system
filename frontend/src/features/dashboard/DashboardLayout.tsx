@@ -22,27 +22,27 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  ShowChart as SalesIcon,
-  People as ContactsIcon,
-  AccountTree as PipelineIcon,
-  CalendarToday as CalendarIcon,
-  Settings as SettingsIcon,
-  Task as TaskIcon,
-  Notifications as NotificationsIcon,
-  Calculate as CalculateIcon,
-  Landscape as LandIcon,
-  Map as ParcelApiIcon,
-  Code as CodeIcon,
+  ShowChartOutlined as SalesIcon,
+  PeopleOutlined as ContactsIcon,
+  AccountTreeOutlined as PipelineIcon,
+  CalendarTodayOutlined as CalendarIcon,
+  SettingsOutlined as SettingsIcon,
+  TaskOutlined as TaskIcon,
+  NotificationsOutlined as NotificationsIcon,
+  CalculateOutlined as CalculateIcon,
+  LandscapeOutlined as LandIcon,
+  MapOutlined as ParcelApiIcon,
+  CodeOutlined as CodeIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  School as TrainingIcon,
-  Campaign as MarketingIcon,
-  AutoFixHigh as AutomationIcon,
-  SmartToy as AIIcon,
-  Phone as PhoneIcon,
-  Assessment as AssessmentIcon,
+  SchoolOutlined as TrainingIcon,
+  CampaignOutlined as MarketingIcon,
+  AutoFixHighOutlined as AutomationIcon,
+  SmartToyOutlined as AIIcon,
+  PhoneOutlined as PhoneIcon,
+  AssessmentOutlined as AssessmentIcon,
   Logout as LogoutIcon,
-  Assignment as DealDeskIcon,
+  AssignmentOutlined as DealDeskIcon,
   ArrowDropDown as ArrowDropDownIcon,
 } from '@mui/icons-material';
 import SalesPerformance from './components/SalesPerformance';
@@ -127,8 +127,11 @@ function ParcelApiContent() {
         const url = `${PARCEL_API_BASE.replace(/\/$/, '')}/parcels/by-apn?apn=${encodeURIComponent(q.trim())}`;
         const res = await fetch(url);
         if (!res.ok) {
+          const isLocalhost = typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location.hostname);
           const msg = res.status === 404 || res.status >= 500
-            ? `Parcel API error (${res.status}). Is the server running? Set REACT_APP_PARCEL_API_URL in frontend .env (e.g. http://localhost:8001) and run: uvicorn app:app --port 8001 in parcel_api/`
+            ? isLocalhost
+              ? `Parcel API error (${res.status}). Is the server running? Set REACT_APP_PARCEL_API_URL in frontend .env (e.g. http://localhost:8001) and run: uvicorn app:app --port 8001 in parcel_api/`
+              : `Parcel API error (${res.status}). The deployed Parcel API may be down or not configured for this site.`
             : 'Parcel API error';
           throw new Error(msg);
         }
@@ -178,7 +181,16 @@ function ParcelApiContent() {
       const errMsg = e instanceof Error ? e.message : 'Search failed';
       const isNetworkError = /failed to fetch|load failed|network error|connection refused/i.test(errMsg) || (e instanceof TypeError && errMsg.includes('fetch'));
       if (isLikelyApn(q) && isNetworkError) {
-        setSearchError('Cannot reach the Parcel API. Start the server in a terminal: cd parcel_api && uvicorn app:app --reload --port 8001');
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        const isLocalhost = /^localhost$|^127\.0\.0\.1$/.test(host);
+        const isLiveSite = /github\.io$/.test(host) || (!isLocalhost && host.length > 0);
+        setSearchError(
+          isLocalhost
+            ? 'Cannot reach the Parcel API. Start the server in a terminal: cd parcel_api && uvicorn app:app --reload --port 8001'
+            : isLiveSite
+              ? 'Parcel API is not set up for this site. To enable APN search here: (1) Deploy the Parcel API on Render, (2) Add variable REACT_APP_PARCEL_API_URL in GitHub repo Settings → Actions → Variables, (3) Push a commit to trigger a new deploy. See the repo docs/PARCEL_API_CHECKLIST.md for step-by-step.'
+              : 'Cannot reach the Parcel API. Run it locally: cd parcel_api && uvicorn app:app --port 8001'
+        );
       } else {
         setSearchError(errMsg);
       }
@@ -477,7 +489,21 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
   };
 
   const handleUpdateContact = (updated: Contact) => {
-    setContacts((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+    setContacts((prev) => {
+      const next = prev.map((c) => {
+        if (c.id !== updated.id) return c;
+        // Use the tasks array from TasksView as-is (no remap) so dueTime is never dropped
+        const tasks = updated.tasks ?? c.tasks ?? [];
+        return {
+          ...c,
+          ...updated,
+          tasks,
+        };
+      });
+      // Persist immediately with the exact state we're setting
+      saveContacts(next, currentCrmId);
+      return next;
+    });
   };
 
   const handleOpenContact = (contactId: number) => {
@@ -550,7 +576,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
       case 'Training & Resources':
         return <TrainingResources />;
       case 'Tasks':
-        return <TasksView contacts={contacts} onOpenContact={handleOpenContact} />;
+        return (
+          <TasksView
+            contacts={contacts}
+            onOpenContact={handleOpenContact}
+            onUpdateContact={handleUpdateContact}
+            onPersistContacts={saveContacts}
+            crmId={currentCrmId}
+          />
+        );
       case 'Settings':
         return <Settings />;
       case 'Parcel API':

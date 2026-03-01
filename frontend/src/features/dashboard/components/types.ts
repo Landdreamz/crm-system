@@ -16,7 +16,8 @@ export interface Appointment {
 export interface ContactTask {
   id: string;
   title: string;
-  dueDate?: string; // ISO date
+  dueDate?: string; // ISO date YYYY-MM-DD
+  dueTime?: string; // optional time e.g. "14:30"
   completed: boolean;
 }
 

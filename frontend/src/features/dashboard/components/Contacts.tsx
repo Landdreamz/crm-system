@@ -27,6 +27,8 @@ import {
   Popover,
   FormControlLabel,
   Checkbox,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -49,6 +51,12 @@ import { Contact, NewContact, Appointment, ContactTask, PipelineStage } from './
 
 function formatShortDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDueTime(timeStr: string): string {
+  if (!timeStr || !/^\d{1,2}:\d{2}/.test(timeStr)) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m ?? 0).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 function getUpcomingAppointment(contact: Contact): Appointment | null {
@@ -750,7 +758,22 @@ const Contacts: React.FC<ContactsProps> = ({
   };
 
   const handleUpdateContact = (updated: Contact) => {
-    setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setContacts((prev) =>
+      prev.map((c) => {
+        if (c.id !== updated.id) return c;
+        return {
+          ...c,
+          ...updated,
+          tasks: (updated.tasks ?? []).map((t) => ({
+            id: t.id,
+            title: t.title,
+            dueDate: t.dueDate,
+            dueTime: t.dueTime,
+            completed: t.completed,
+          })),
+        };
+      })
+    );
   };
 
   const handleStatusChange = (contact: Contact, event: SelectChangeEvent<string>) => {
@@ -1318,7 +1341,7 @@ const Contacts: React.FC<ContactsProps> = ({
                               setEditingTask({
                                 contact: row,
                                 task: nextTask,
-                                draft: nextTask ? { ...nextTask } : { id: `task-${Date.now()}`, title: '', dueDate: undefined, completed: false },
+                                draft: nextTask ? { ...nextTask } : { id: `task-${Date.now()}`, title: '', dueDate: undefined, dueTime: undefined, completed: false },
                                 anchorEl: e.currentTarget,
                               });
                             }}
@@ -1344,7 +1367,7 @@ const Contacts: React.FC<ContactsProps> = ({
                               return nextTask ? (
                                 <Typography variant="caption" sx={{ color: 'primary.main', textDecoration: 'underline' }}>
                                   {nextTask.title}
-                                  {nextTask.dueDate ? ` · ${formatShortDate(nextTask.dueDate)}` : ''}
+                                  {nextTask.dueDate ? ` · ${formatShortDate(nextTask.dueDate)}${nextTask.dueTime ? ` ${formatDueTime(nextTask.dueTime)}` : ''}` : nextTask.dueTime ? ` · ${formatDueTime(nextTask.dueTime)}` : ''}
                                 </Typography>
                               ) : (
                                 <Typography variant="caption" color="text.disabled">Add task...</Typography>
@@ -1530,16 +1553,31 @@ const Contacts: React.FC<ContactsProps> = ({
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ 'aria-label': 'Task due date' }}
               />
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="body2">Completed</Typography>
-                <Button
-                  size="small"
-                  variant={editingTask.draft.completed ? 'contained' : 'outlined'}
-                  onClick={() => setEditingTask((prev) => prev ? { ...prev, draft: { ...prev.draft, completed: !prev.draft.completed } } : null)}
+              <TextField
+                size="small"
+                label="Due time"
+                type="time"
+                fullWidth
+                value={editingTask.draft.dueTime ?? ''}
+                onChange={(e) => setEditingTask((prev) => prev ? { ...prev, draft: { ...prev.draft, dueTime: e.target.value || undefined } } : null)}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 'aria-label': 'Task due time', step: 300 }}
+              />
+              <FormControl size="small" fullWidth>
+                <InputLabel>Completed</InputLabel>
+                <Select
+                  label="Completed"
+                  value={editingTask.draft.completed ? 'yes' : 'no'}
+                  onChange={(e: SelectChangeEvent<string>) =>
+                    setEditingTask((prev) =>
+                      prev ? { ...prev, draft: { ...prev.draft, completed: e.target.value === 'yes' } } : null
+                    )
+                  }
                 >
-                  {editingTask.draft.completed ? 'Yes' : 'No'}
-                </Button>
-              </Stack>
+                  <MenuItem value="no">No</MenuItem>
+                  <MenuItem value="yes">Yes</MenuItem>
+                </Select>
+              </FormControl>
               <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button size="small" onClick={() => setEditingTask(null)}>Cancel</Button>
                 <Button size="small" variant="contained" onClick={handleSaveTask}>Save</Button>

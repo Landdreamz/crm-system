@@ -63,12 +63,25 @@ Only needed if you want the Parcel API tab to work in production.
 
 ---
 
+---
+
+## 4. Parcel API on GitHub Pages (optional)
+
+If your frontend is on **GitHub Pages** (https://landdreamz.github.io/crm-system/) and you want **APN search** to work there:
+
+1. Deploy the Parcel API (e.g. [Render](#3-deploy-the-parcel-api--optional)); note the URL.
+2. In your repo: **Settings → Secrets and variables → Actions**.
+3. Under **Variables**, add **REACT_APP_PARCEL_API_URL** = your Parcel API URL (e.g. `https://your-parcel-api.onrender.com`).
+4. Push a commit to `main` so the deploy workflow runs again. The next build will use that URL and APN search on the live site will call your deployed API.
+
+---
+
 ## Summary
 
 | Part        | Where   | Result |
 |------------|---------|--------|
-| Frontend   | Vercel  | Public URL for the dashboard |
+| Frontend   | Vercel or GitHub Pages | Public URL for the dashboard |
 | Backend    | Render / Railway / etc. | API URL → set in Vercel as `REACT_APP_TWILIO_API_URL` |
-| Parcel API | Render / Railway / etc. | API URL → set in Vercel as `REACT_APP_PARCEL_API_URL` |
+| Parcel API | Render / Railway / etc. | API URL → set in Vercel or as Actions variable `REACT_APP_PARCEL_API_URL` for GitHub Pages |
 
-Start with **frontend on Vercel**; the app will load and you can add backend and Parcel API later and plug in their URLs.
+Start with **frontend on Vercel or GitHub Pages**; the app will load. Add backend and Parcel API when you need them and plug in their URLs.

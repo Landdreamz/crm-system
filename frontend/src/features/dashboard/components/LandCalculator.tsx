@@ -71,12 +71,19 @@ export const LandCalculator: React.FC = () => {
   const [pasteInput, setPasteInput] = useState<string>('');
   const [showQuickInput, setShowQuickInput] = useState<boolean>(true);
   const [parseError, setParseError] = useState<string>('');
-  
+  const [anchorPoints, setAnchorPoints] = useState<string>('');
+  const [smartNotes, setSmartNotes] = useState<string>('');
+  const [creativeOffer, setCreativeOffer] = useState<string>('');
+
   const buildCopySummary = (): string => {
     const safe = (v: string | number | undefined | null): string => {
       if (v === undefined || v === null) return '';
       if (typeof v === 'number') return `${v}`;
       return v;
+    };
+    const placeholder = (v: string | number | undefined | null): string => {
+      const s = safe(v);
+      return (s && String(s).trim()) ? String(s).trim() : '___________________';
     };
 
     const fmtMoney = (v?: string): string => {
@@ -99,15 +106,36 @@ export const LandCalculator: React.FC = () => {
       return n.toFixed(2);
     };
 
-    // Averages similar to tables
+    /** Format date as MM/DD/YYYY with leading zeros (e.g. 09/26/2025). Accepts YYYY-MM-DD or M/D/YYYY. */
+    const formatDateMMDDYYYY = (dateStr: string | undefined | null): string => {
+      if (!dateStr || !String(dateStr).trim()) return '';
+      const s = String(dateStr).trim();
+      if (s.includes('/')) {
+        const parts = s.split('/');
+        if (parts.length === 3) {
+          const month = parts[0].padStart(2, '0');
+          const day = parts[1].padStart(2, '0');
+          let year = parts[2];
+          if (year.length === 2) year = '20' + year;
+          return `${month}/${day}/${year}`;
+        }
+      }
+      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+        const [y, m, d] = s.split('-');
+        return `${m.padStart(2, '0')}/${d.padStart(2, '0')}/${y}`;
+      }
+      return s;
+    };
+
+    // Averages similar to tables (all 5 comps)
     const avgPricePerSqFt = (() => {
-      const values = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt]
+      const values = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt, comp4Data.pricePerSqFt, comp5Data.pricePerSqFt]
         .filter(p => p && !isNaN(parseFloat(p)) ) as string[];
       if (values.length === 0) return 0;
       return values.reduce((s, p) => s + parseFloat(p), 0) / values.length;
     })();
     const avgPricePerAcre = (() => {
-      const values = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre]
+      const values = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre, comp4Data.pricePerAcre, comp5Data.pricePerAcre]
         .filter(p => p && !isNaN(parseFloat(p)) ) as string[];
       if (values.length === 0) return 0;
       return values.reduce((s, p) => s + parseFloat(p), 0) / values.length;
@@ -133,6 +161,12 @@ export const LandCalculator: React.FC = () => {
     const activePricePerAcre = (activeListingData.listPrice && activeListingData.acres)
       ? parseFloat(activeListingData.listPrice) / parseFloat(activeListingData.acres)
       : undefined;
+    const active2PricePerSqFt = (activeListing2Data.listPrice && activeListing2Data.squareFeet)
+      ? parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.squareFeet)
+      : undefined;
+    const active2PricePerAcre = (activeListing2Data.listPrice && activeListing2Data.acres)
+      ? parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.acres)
+      : undefined;
 
     const askingMinusMarket = (baseValue && estimatedMarketValue)
       ? (parseFloat(baseValue) - estimatedMarketValue)
@@ -143,49 +177,60 @@ export const LandCalculator: React.FC = () => {
 
     const compBlock = (comp: typeof comp1Data, num: number) =>
       `✅ COMP #${num}\n` +
-      `Address: ${safe(comp.address)}\n` +
-      `Sq Ft: ${safe(comp.squareFeet)}\n` +
-      `Acres: ${safe(comp.acres)}\n` +
-      `Tree Density: ${safe(comp.trees)}\n` +
-      `Flood Zone: ${safe(comp.floodZone)}\n` +
-      `Sold Date: ${safe(comp.closeDate)}\n` +
-      `Sold Price: $ ${fmtMoney(comp.salePrice)}\n` +
-      `DOM: ${safe(comp.dom)}\n` +
-      `Sq Ft Sold Price: $ ${fmtTwo(comp.pricePerSqFt)}\n` +
-      `Acres Sold Price: $ ${fmtMoney(comp.pricePerAcre)}\n\n`;
+      `Address: ${placeholder(comp.address)}\n` +
+      `MLS #: ${placeholder(comp.mlsNumber)}\n` +
+      `Sq Ft: ${placeholder(comp.squareFeet)}\n` +
+      `Acres: ${placeholder(comp.acres)}\n` +
+      `Tree Density: ${placeholder(comp.trees)}\n` +
+      `Flood Zone: ${placeholder(comp.floodZone)}\n` +
+      `Sold Date: ${placeholder(formatDateMMDDYYYY(comp.closeDate))}\n` +
+      `Sold Price: $ ${placeholder(comp.salePrice ? fmtMoney(comp.salePrice) : '')}\n` +
+      `DOM: ${placeholder(comp.dom)}\n` +
+      `Sq Ft Sold Price: $ ${placeholder(comp.pricePerSqFt ? fmtTwo(comp.pricePerSqFt) : '')}\n` +
+      `Acres Sold Price: $ ${placeholder(comp.pricePerAcre ? fmtMoney(comp.pricePerAcre) : '')}\n\n`;
 
     const subjectLotSize = [
       squareFeet ? `${parseInt(squareFeet).toLocaleString()} sq ft` : '',
       acres ? `(${parseFloat(acres).toFixed(4)} acres)` : ''
     ].filter(Boolean).join(' ') || '';
 
+    const activeListingBlock = (data: typeof activeListingData, num: number, pricePerSqFt: number | undefined, pricePerAcre: number | undefined) =>
+      `📌 ACTIVE LISTING #${num}\n` +
+      `Address: ${placeholder(data.address)}\n` +
+      `MLS #: ${placeholder(data.mlsNumber)}\n` +
+      `Sq Ft: ${placeholder(data.squareFeet)}\n` +
+      `Acres: ${placeholder(data.acres)}\n` +
+      `Tree Density: ${placeholder(data.trees)}\n` +
+      `Flood Zone: ${placeholder(data.floodZone)}\n` +
+      `Active Listing Date: ${placeholder(formatDateMMDDYYYY(data.listDate))}\n` +
+      `Asking Price: $ ${placeholder(data.listPrice ? fmtMoney(data.listPrice) : '')}\n` +
+      `DOM: ${placeholder(data.daysOnMarket)}\n` +
+      `Sq Ft Asking Price: $ ${placeholder(pricePerSqFt != null ? fmtTwoNum(pricePerSqFt) : '')}\n` +
+      `Acres Asking Price: $ ${placeholder(pricePerAcre != null ? fmtMoneyNum(pricePerAcre) : '')}\n\n`;
+
     const fullSummary =
-      `${compBlock(comp1Data, 1)}\n` +
-      `${compBlock(comp2Data, 2)}\n` +
-      `${compBlock(comp3Data, 3)}\n` +
-      `📌 ACTIVE LISTING #1\n` +
-      `Address: ${safe(activeListingData.address)}\n` +
-      `Sq Ft: ${safe(activeListingData.squareFeet)}\n` +
-      `Acres: ${safe(activeListingData.acres)}\n` +
-      `Tree Density: ${safe(activeListingData.trees)}\n` +
-      `Flood Zone: ${safe(activeListingData.floodZone)}\n` +
-      `Active Listing Date: ${safe(activeListingData.listDate)}\n` +
-      `Asking Price: $ ${fmtMoney(activeListingData.listPrice)}\n` +
-      `DOM: ${safe(activeListingData.daysOnMarket)}\n` +
-      `Sq Ft Asking Price: $ ${fmtTwoNum(activePricePerSqFt)}\n` +
-      `Acres Asking Price: $ ${fmtMoneyNum(activePricePerAcre)}\n\n` +
+      `${compBlock(comp1Data, 1)}` +
+      `${compBlock(comp2Data, 2)}` +
+      `${compBlock(comp3Data, 3)}` +
+      `${compBlock(comp4Data, 4)}` +
+      `${compBlock(comp5Data, 5)}` +
+      activeListingBlock(activeListingData, 1, activePricePerSqFt, activePricePerAcre) +
+      activeListingBlock(activeListing2Data, 2, active2PricePerSqFt, active2PricePerAcre) +
       `MARKET ANALYSIS\n` +
-      `SQ FT Avg Sold Price: $ ${fmtTwoNum(avgPricePerSqFt)}\n` +
-      `Acres Avg Sold Price: $ ${fmtMoneyNum(avgPricePerAcre)}\n` +
-      `Subject Property Lot Size: ${subjectLotSize}\n\n` +
+      `SQ FT Avg Sold Price: $ ${avgPricePerSqFt ? fmtTwoNum(avgPricePerSqFt) : '___________________'}\n` +
+      `Acres Avg Sold Price: $ ${avgPricePerAcre ? fmtMoneyNum(avgPricePerAcre) : '___________________'}\n` +
+      `Subject Property Lot Size: ${subjectLotSize || '___________________'}\n\n` +
       `REAL PROPERTY MARKET VALUE\n` +
-      `REAL PROPERTY MARKET VALUE: $ ${fmtMoneyNum(estimatedMarketValue)} (100%)\n` +
+      `REAL PROPERTY MARKET VALUE: $${estimatedMarketValue ? fmtMoneyNum(estimatedMarketValue) : '___________________'} (100%)\n` +
       `${percentLines}\n\n` +
       `Pricing Comparison\n` +
-      `Seller Asking Price: $ ${fmtMoney(baseValue)}\n` +
-      `County Appraisal Value: $ ${fmtMoney(appraisalValue)}\n` +
-      `Asking Price – Real Market Value Difference: $ ${askingMinusMarket !== undefined ? fmtMoneyNum(askingMinusMarket) : ''}\n` +
-      `Asking Price to Market %: ${askingToMarketPct !== undefined ? fmtTwoNum(askingToMarketPct) : ''}%\n`;
+      `Seller Asking Price: $ ${placeholder(baseValue ? fmtMoney(baseValue) : '')}\n` +
+      `County Appraisal Value: $ ${placeholder(appraisalValue ? fmtMoney(appraisalValue) : '')}\n` +
+      `Asking Price – Real Market Value Difference: $ ${askingMinusMarket !== undefined ? fmtMoneyNum(askingMinusMarket) : '___________________'}\n` +
+      `Asking Price to Market %: ${askingToMarketPct !== undefined ? fmtTwoNum(askingToMarketPct) : '__________'}%\n` +
+      `Anchor Points: ${placeholder(anchorPoints)}\n` +
+      `Smart Notes: ${placeholder(smartNotes)}\n` +
+      `Creative Offer: ${placeholder(creativeOffer)}\n`;
     return fullSummary;
   };
   
@@ -199,6 +244,7 @@ export const LandCalculator: React.FC = () => {
     salePrice: '',
     appraisalValue: '',
     address: '',
+    mlsNumber: '',
     debrisLevel: '',
     slope: '',
     trees: '',
@@ -221,6 +267,7 @@ export const LandCalculator: React.FC = () => {
     salePrice: '',
     appraisalValue: '',
     address: '',
+    mlsNumber: '',
     debrisLevel: '',
     slope: '',
     trees: '',
@@ -243,6 +290,7 @@ export const LandCalculator: React.FC = () => {
     salePrice: '',
     appraisalValue: '',
     address: '',
+    mlsNumber: '',
     debrisLevel: '',
     slope: '',
     trees: '',
@@ -264,6 +312,77 @@ export const LandCalculator: React.FC = () => {
     squareFeet: '',
     listPrice: '',
     address: '',
+    mlsNumber: '',
+    debrisLevel: '',
+    slope: '',
+    trees: '',
+    needsWell: '',
+    needsSeptic: '',
+    floodZone: '' as FloodZoneValues | '',
+    dom: '',
+    pricePerSqFt: '',
+    pricePerAcre: '',
+    listDate: '',
+    status: 'Active',
+    daysOnMarket: ''
+  });
+
+  // Comp 4 states
+  const [comp4PasteInput, setComp4PasteInput] = useState<string>('');
+  const [showComp4QuickInput, setShowComp4QuickInput] = useState<boolean>(true);
+  const [comp4ParseError, setComp4ParseError] = useState<string>('');
+  const [comp4Data, setComp4Data] = useState({
+    acres: '',
+    squareFeet: '',
+    salePrice: '',
+    appraisalValue: '',
+    address: '',
+    mlsNumber: '',
+    debrisLevel: '',
+    slope: '',
+    trees: '',
+    needsWell: '',
+    needsSeptic: '',
+    floodZone: '' as FloodZoneValues | '',
+    dom: '',
+    pricePerSqFt: '',
+    pricePerAcre: '',
+    closeDate: ''
+  });
+
+  // Comp 5 states
+  const [comp5PasteInput, setComp5PasteInput] = useState<string>('');
+  const [showComp5QuickInput, setShowComp5QuickInput] = useState<boolean>(true);
+  const [comp5ParseError, setComp5ParseError] = useState<string>('');
+  const [comp5Data, setComp5Data] = useState({
+    acres: '',
+    squareFeet: '',
+    salePrice: '',
+    appraisalValue: '',
+    address: '',
+    mlsNumber: '',
+    debrisLevel: '',
+    slope: '',
+    trees: '',
+    needsWell: '',
+    needsSeptic: '',
+    floodZone: '' as FloodZoneValues | '',
+    dom: '',
+    pricePerSqFt: '',
+    pricePerAcre: '',
+    closeDate: ''
+  });
+
+  // Active Listing 2 states
+  const [activeListing2PasteInput, setActiveListing2PasteInput] = useState<string>('');
+  const [showActiveListing2QuickInput, setShowActiveListing2QuickInput] = useState<boolean>(true);
+  const [activeListing2ParseError, setActiveListing2ParseError] = useState<string>('');
+  const [activeListing2Data, setActiveListing2Data] = useState({
+    acres: '',
+    squareFeet: '',
+    listPrice: '',
+    address: '',
+    mlsNumber: '',
     debrisLevel: '',
     slope: '',
     trees: '',
@@ -500,6 +619,7 @@ export const LandCalculator: React.FC = () => {
         salePrice: '',
         appraisalValue: '',
         address: '',
+        mlsNumber: '',
         debrisLevel: '',
         slope: '',
         trees: '',
@@ -536,9 +656,10 @@ export const LandCalculator: React.FC = () => {
           break;
         }
         
-        // Fallback to labeled address fields
+        // Fallback to labeled address fields (MLS may have "Address:\tStreet\tOrig Price:")
         if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
-          newData.address = extractValue(line);
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
           foundAddress = true;
           break;
         }
@@ -599,6 +720,14 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        // ML# or MLS # (MLS number)
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) {
+          const mlsMatch = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i);
+          if (mlsMatch) {
+            newData.mlsNumber = mlsMatch[1];
+          }
+        }
+
         // DOM (Days on Market)
         if (lowerLine.includes('dom:')) {
           const domMatch = line.match(/DOM:\s*(\d+)/i);
@@ -633,10 +762,12 @@ export const LandCalculator: React.FC = () => {
 
         // Close Date
         if (lowerLine.includes('close date:')) {
-          const dateMatch = line.match(/Close Date:\s*(\d{2}\/\d{2}\/\d{4})/i);
+          const dateMatch = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
           if (dateMatch) {
-            const [month, day, year] = dateMatch[1].split('/');
-            newData.closeDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const parts = dateMatch[1].split('/');
+            const [month, day, year] = parts;
+            const y = year.length === 2 ? `20${year}` : year;
+            newData.closeDate = `${y}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
           }
         }
 
@@ -682,6 +813,7 @@ export const LandCalculator: React.FC = () => {
         salePrice: '',
         appraisalValue: '',
         address: '',
+        mlsNumber: '',
         debrisLevel: '',
         slope: '',
         trees: '',
@@ -718,9 +850,10 @@ export const LandCalculator: React.FC = () => {
           break;
         }
         
-        // Fallback to labeled address fields
+        // Fallback to labeled address fields (MLS may have "Address:\tStreet\tOrig Price:")
         if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
-          newData.address = extractValue(line);
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
           foundAddress = true;
           break;
         }
@@ -813,12 +946,22 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        // ML# or MLS # (MLS number)
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) {
+          const mlsMatch = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i);
+          if (mlsMatch) {
+            newData.mlsNumber = mlsMatch[1];
+          }
+        }
+
         // Close Date
         if (lowerLine.includes('close date:')) {
-          const dateMatch = line.match(/Close Date:\s*(\d{2}\/\d{2}\/\d{4})/i);
+          const dateMatch = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
           if (dateMatch) {
-            const [month, day, year] = dateMatch[1].split('/');
-            newData.closeDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const parts = dateMatch[1].split('/');
+            const [month, day, year] = parts;
+            const y = year.length === 2 ? `20${year}` : year;
+            newData.closeDate = `${y}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
           }
         }
 
@@ -864,6 +1007,7 @@ export const LandCalculator: React.FC = () => {
         salePrice: '',
         appraisalValue: '',
         address: '',
+        mlsNumber: '',
         debrisLevel: '',
         slope: '',
         trees: '',
@@ -900,9 +1044,10 @@ export const LandCalculator: React.FC = () => {
           break;
         }
         
-        // Fallback to labeled address fields
+        // Fallback to labeled address fields (MLS may have "Address:\tStreet\tOrig Price:")
         if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
-          newData.address = extractValue(line);
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
           foundAddress = true;
           break;
         }
@@ -990,12 +1135,22 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        // ML# or MLS # (MLS number)
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) {
+          const mlsMatch = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i);
+          if (mlsMatch) {
+            newData.mlsNumber = mlsMatch[1];
+          }
+        }
+
         // Close Date
         if (lowerLine.includes('close date:')) {
-          const dateMatch = line.match(/Close Date:\s*(\d{2}\/\d{2}\/\d{4})/i);
+          const dateMatch = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
           if (dateMatch) {
-            const [month, day, year] = dateMatch[1].split('/');
-            newData.closeDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const parts = dateMatch[1].split('/');
+            const [month, day, year] = parts;
+            const y = year.length === 2 ? `20${year}` : year;
+            newData.closeDate = `${y}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
           }
         }
 
@@ -1030,6 +1185,138 @@ export const LandCalculator: React.FC = () => {
     }
   };
 
+  const parseComp4InputData = () => {
+    try {
+      setComp4ParseError('');
+      const lines = comp4PasteInput.split('\n');
+      const newData = {
+        acres: '', squareFeet: '', salePrice: '', appraisalValue: '', address: '', mlsNumber: '', debrisLevel: '', slope: '', trees: '', needsWell: '', needsSeptic: '',
+        floodZone: '' as FloodZoneValues | '', dom: '', pricePerSqFt: '', pricePerAcre: '', closeDate: ''
+      };
+      const extractValue = (line: string) => { const parts = line.split(':'); return parts.length > 1 ? parts[1].trim() : ''; };
+      let foundAddress = false;
+      for (let i = 0; i < Math.min(20, lines.length); i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const mlsAddressRegex = /^(\d+\s+[^,]+),\s*([^,]+),\s*([^,]+),\s*(\d{5}(?:-\d{4})?)/;
+        if (mlsAddressRegex.test(line) && !line.toLowerCase().includes('agent') && !line.toLowerCase().includes('office')) {
+          newData.address = line.split(' County')[0].trim(); foundAddress = true; break;
+        }
+        if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
+          foundAddress = true;
+          break;
+        }
+      }
+      if (!foundAddress) {
+        for (let i = 0; i < Math.min(20, lines.length); i++) {
+          const line = lines[i].trim();
+          if (/^\d+\s+[^,]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Court|Ct|Circle|Cir|Boulevard|Blvd|Highway|Hwy)/i.test(line)) {
+            newData.address = line.split(' County')[0].trim(); break;
+          }
+        }
+      }
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const lowerLine = line.toLowerCase();
+        if (line.includes('Address:')) continue;
+        const sqftRegex = /Lot Size:\s*(\d{1,3}(?:,\d{3})*|\d+)\s*\/?\s*(?:Survey)?/i;
+        const acreRegex = /Acres:\s*\.?(\d+\.\d+|\.\d+|\d+)/i;
+        const sqftMatch = lowerLine.match(sqftRegex);
+        if (sqftMatch) { newData.squareFeet = sqftMatch[1].replace(/,/g, ''); if (!newData.acres) newData.acres = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4); }
+        const acreMatch = lowerLine.match(acreRegex);
+        if (acreMatch) { let acres = acreMatch[1]; if (!acres.includes('.')) acres = '0.' + acres; newData.acres = acres; if (!newData.squareFeet) newData.squareFeet = Math.round(parseFloat(acres) * SQUARE_FEET_PER_ACRE).toString(); }
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) { const m = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i); if (m) newData.mlsNumber = m[1]; }
+        if (lowerLine.includes('dom:')) { const m = line.match(/DOM:\s*(\d+)/i); if (m) newData.dom = m[1]; }
+        if (lowerLine.includes('sale price:')) { const m = line.match(/Sale Price:\s*\$?(\d{1,3}(?:,\d{3})*|\d+)/i); if (m) newData.salePrice = m[1].replace(/,/g, ''); }
+        if (lowerLine.includes('sp/sf:')) { const m = line.match(/SP\/SF:\s*\$?(\d+\.?\d*)/i); if (m) newData.pricePerSqFt = m[1]; }
+        if (lowerLine.includes('sp/acr:')) { const m = line.match(/SP\/ACR:\s*\$?(\d{1,3}(?:,\d{3})*|\d+\.?\d*)/i); if (m) newData.pricePerAcre = m[1].replace(/,/g, ''); }
+        if (lowerLine.includes('close date:')) { const m = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i); if (m) { const [mo, d, y] = m[1].split('/'); const yr = y.length === 2 ? `20${y}` : y; newData.closeDate = `${yr}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; } }
+        if (lowerLine.includes('flood')) {
+          if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
+          else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
+          else if (lowerLine.includes('500')) newData.floodZone = FLOOD_ZONES.FIVE_HUNDRED_YEAR;
+          else if (lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR_WAY;
+          else if (lowerLine.includes('100')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR;
+          else if (lowerLine.includes('clear')) newData.floodZone = FLOOD_ZONES.CLEAR;
+          else newData.floodZone = FLOOD_ZONES.UNDETERMINED;
+        }
+      }
+      setComp4Data(newData);
+      setComp4PasteInput('');
+      setShowComp4QuickInput(false);
+    } catch (error) {
+      setComp4ParseError('Could not parse the input data. Please check the format and try again.');
+    }
+  };
+
+  const parseComp5InputData = () => {
+    try {
+      setComp5ParseError('');
+      const lines = comp5PasteInput.split('\n');
+      const newData = {
+        acres: '', squareFeet: '', salePrice: '', appraisalValue: '', address: '', mlsNumber: '', debrisLevel: '', slope: '', trees: '', needsWell: '', needsSeptic: '',
+        floodZone: '' as FloodZoneValues | '', dom: '', pricePerSqFt: '', pricePerAcre: '', closeDate: ''
+      };
+      const extractValue = (line: string) => { const parts = line.split(':'); return parts.length > 1 ? parts[1].trim() : ''; };
+      let foundAddress = false;
+      for (let i = 0; i < Math.min(20, lines.length); i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const mlsAddressRegex = /^(\d+\s+[^,]+),\s*([^,]+),\s*([^,]+),\s*(\d{5}(?:-\d{4})?)/;
+        if (mlsAddressRegex.test(line) && !line.toLowerCase().includes('agent') && !line.toLowerCase().includes('office')) {
+          newData.address = line.split(' County')[0].trim(); foundAddress = true; break;
+        }
+        if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
+          foundAddress = true;
+          break;
+        }
+      }
+      if (!foundAddress) {
+        for (let i = 0; i < Math.min(20, lines.length); i++) {
+          const line = lines[i].trim();
+          if (/^\d+\s+[^,]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Court|Ct|Circle|Cir|Boulevard|Blvd|Highway|Hwy)/i.test(line)) {
+            newData.address = line.split(' County')[0].trim(); break;
+          }
+        }
+      }
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const lowerLine = line.toLowerCase();
+        if (line.includes('Address:')) continue;
+        const sqftRegex = /Lot Size:\s*(\d{1,3}(?:,\d{3})*|\d+)\s*\/?\s*(?:Survey)?/i;
+        const acreRegex = /Acres:\s*\.?(\d+\.\d+|\.\d+|\d+)/i;
+        const sqftMatch = lowerLine.match(sqftRegex);
+        if (sqftMatch) { newData.squareFeet = sqftMatch[1].replace(/,/g, ''); if (!newData.acres) newData.acres = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4); }
+        const acreMatch = lowerLine.match(acreRegex);
+        if (acreMatch) { let acres = acreMatch[1]; if (!acres.includes('.')) acres = '0.' + acres; newData.acres = acres; if (!newData.squareFeet) newData.squareFeet = Math.round(parseFloat(acres) * SQUARE_FEET_PER_ACRE).toString(); }
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) { const m = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i); if (m) newData.mlsNumber = m[1]; }
+        if (lowerLine.includes('dom:')) { const m = line.match(/DOM:\s*(\d+)/i); if (m) newData.dom = m[1]; }
+        if (lowerLine.includes('sale price:')) { const m = line.match(/Sale Price:\s*\$?(\d{1,3}(?:,\d{3})*|\d+)/i); if (m) newData.salePrice = m[1].replace(/,/g, ''); }
+        if (lowerLine.includes('sp/sf:')) { const m = line.match(/SP\/SF:\s*\$?(\d+\.?\d*)/i); if (m) newData.pricePerSqFt = m[1]; }
+        if (lowerLine.includes('sp/acr:')) { const m = line.match(/SP\/ACR:\s*\$?(\d{1,3}(?:,\d{3})*|\d+\.?\d*)/i); if (m) newData.pricePerAcre = m[1].replace(/,/g, ''); }
+        if (lowerLine.includes('close date:')) { const m = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i); if (m) { const [mo, d, y] = m[1].split('/'); const yr = y.length === 2 ? `20${y}` : y; newData.closeDate = `${yr}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; } }
+        if (lowerLine.includes('flood')) {
+          if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
+          else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
+          else if (lowerLine.includes('500')) newData.floodZone = FLOOD_ZONES.FIVE_HUNDRED_YEAR;
+          else if (lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR_WAY;
+          else if (lowerLine.includes('100')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR;
+          else if (lowerLine.includes('clear')) newData.floodZone = FLOOD_ZONES.CLEAR;
+          else newData.floodZone = FLOOD_ZONES.UNDETERMINED;
+        }
+      }
+      setComp5Data(newData);
+      setComp5PasteInput('');
+      setShowComp5QuickInput(false);
+    } catch (error) {
+      setComp5ParseError('Could not parse the input data. Please check the format and try again.');
+    }
+  };
+
   const parseActiveListingInputData = () => {
     try {
       setActiveListingParseError('');
@@ -1040,6 +1327,7 @@ export const LandCalculator: React.FC = () => {
         squareFeet: '',
         listPrice: '',
         address: '',
+        mlsNumber: '',
         debrisLevel: '',
         slope: '',
         trees: '',
@@ -1091,9 +1379,10 @@ export const LandCalculator: React.FC = () => {
           break;
         }
         
-        // Fallback to labeled address fields
+        // Fallback to labeled address fields (MLS may have "Address:\tStreet\tOrig Price:")
         if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
-          newData.address = extractValue(line);
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
           foundAddress = true;
           break;
         }
@@ -1113,12 +1402,12 @@ export const LandCalculator: React.FC = () => {
         }
       }
 
-      // Additional address parsing for MLS format
+      // Additional address parsing for MLS format (Address may be followed by tab and "Orig Price:" etc.)
       if (!foundAddress) {
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (line.includes('Address:') && !line.includes('List Agent:')) {
-            const addressMatch = line.match(/Address:\s*(.+)/);
+            const addressMatch = line.match(/Address:\s*([^\t]+)/);
             if (addressMatch) {
               newData.address = addressMatch[1].trim();
               foundAddress = true;
@@ -1199,18 +1488,28 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
-        // Enhanced Square Footage parsing - ONLY IF ACRES NOT FOUND
-        if (!newData.squareFeet && !newData.acres) {
-          // Handle MLS format: "Lot Size: 83,505 / Appr Dist"
-          if (line.includes('Lot Size:') && line.includes('/')) {
-            const lotSizeMatch = line.match(/Lot Size:\s*([\d,]+)/);
-            if (lotSizeMatch) {
-              newData.squareFeet = lotSizeMatch[1].replace(/,/g, '');
-              // Convert to acres
-              const acreage = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4);
-              newData.acres = acreage;
+        // ML# or MLS # (MLS number)
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) {
+          const mlsMatch = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i);
+          if (mlsMatch) {
+            newData.mlsNumber = mlsMatch[1];
+          }
+        }
+
+        // Lot Size (square feet) - parse even when Acres exists, so we get both (e.g. "Lot Size: 63,031 / Appr Dist")
+        if (line.includes('Lot Size:') && (line.includes('/') || /\d/.test(line))) {
+          const lotSizeMatch = line.match(/Lot Size:\s*([\d,]+)/);
+          if (lotSizeMatch) {
+            newData.squareFeet = lotSizeMatch[1].replace(/,/g, '');
+            if (!newData.acres) {
+              newData.acres = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4);
             }
-          } else if (lowerLine.includes('sq ft:') || lowerLine.includes('sqft:') || lowerLine.includes('square feet:')) {
+          }
+        }
+
+        // Enhanced Square Footage parsing - ONLY IF ACRES AND LOT SIZE NOT FOUND
+        if (!newData.squareFeet && !newData.acres) {
+          if (lowerLine.includes('sq ft:') || lowerLine.includes('sqft:') || lowerLine.includes('square feet:')) {
             const sqftMatch = line.match(/(\d+[,\d]*\.?\d*)/);
             if (sqftMatch) {
               newData.squareFeet = sqftMatch[1].replace(/,/g, '');
@@ -1402,6 +1701,111 @@ export const LandCalculator: React.FC = () => {
       setShowActiveListingQuickInput(false);
     } catch (error) {
       setActiveListingParseError('Could not parse the input data. Please check the format and try again.');
+    }
+  };
+
+  const parseActiveListing2InputData = () => {
+    try {
+      setActiveListing2ParseError('');
+      const lines = activeListing2PasteInput.split('\n');
+      const newData = {
+        acres: '', squareFeet: '', listPrice: '', address: '', mlsNumber: '', debrisLevel: '', slope: '', trees: '', needsWell: '', needsSeptic: '',
+        floodZone: '' as FloodZoneValues | '', dom: '', pricePerSqFt: '', pricePerAcre: '', listDate: '', status: 'Active', daysOnMarket: ''
+      };
+      const extractValue = (line: string) => { const parts = line.split(':'); return parts.length > 1 ? parts[1].trim() : ''; };
+      const extractPrice = (line: string) => { const m = line.match(/\$?\s*([\d,]+(?:\.\d{2})?)/); return m ? m[1].replace(/,/g, '') : ''; };
+      let foundAddress = false;
+      for (let i = 0; i < Math.min(20, lines.length); i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const mlsAddressRegex = /^(\d+\s+[^,]+),\s*([^,]+),\s*([^,]+),\s*(\d{5}(?:-\d{4})?)/;
+        if (mlsAddressRegex.test(line) && !line.toLowerCase().includes('agent') && !line.toLowerCase().includes('office')) {
+          newData.address = line.split(' County')[0].trim(); foundAddress = true; break;
+        }
+        if (line.includes('Address:') && !line.toLowerCase().includes('office') && !line.toLowerCase().includes('agent')) {
+          const addr = extractValue(line);
+          newData.address = addr.includes('\t') ? addr.split('\t')[0].trim() : addr;
+          foundAddress = true;
+          break;
+        }
+      }
+      if (!foundAddress) {
+        for (let i = 0; i < Math.min(20, lines.length); i++) {
+          const line = lines[i].trim();
+          if (/^\d+\s+[^,]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Court|Ct|Circle|Cir|Boulevard|Blvd|Highway|Hwy)/i.test(line)) {
+            newData.address = line.split(' County')[0].trim(); break;
+          }
+        }
+      }
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const lowerLine = line.toLowerCase();
+        if (line.includes('Address:')) continue;
+        if (!newData.mlsNumber && (lowerLine.includes('ml#') || lowerLine.includes('mls#'))) {
+          const m = line.match(/ML#:\s*(\d+)/i) || line.match(/MLS\s*#?\s*:\s*(\d+)/i) || line.match(/ML#\s*(\d+)/i);
+          if (m) newData.mlsNumber = m[1];
+        }
+        if (!newData.listPrice) {
+          if (line.includes('List Price:') && line.includes('$')) {
+            const m = line.match(/List Price:\s*\$?([\d,]+)/) || line.match(/List Price:\t\$?([\d,]+)/);
+            if (m) newData.listPrice = m[1].replace(/,/g, '');
+          } else if (lowerLine.includes('list price') || lowerLine.includes('asking price') || lowerLine.includes('price:')) {
+            newData.listPrice = extractPrice(line);
+          } else if (/\$\d{1,3}(?:,\d{3})*/.test(line)) newData.listPrice = extractPrice(line);
+        }
+        if (!newData.acres) {
+          if (line.includes('Acres:') && !line.includes('LP/Acre:')) {
+            const m = line.match(/Acres:\s*(\d+\.?\d*)/);
+            if (m) { newData.acres = m[1]; newData.squareFeet = (parseFloat(newData.acres) * SQUARE_FEET_PER_ACRE).toFixed(0); }
+          } else if (lowerLine.includes('acre')) {
+            const m = line.match(/(\d+\.?\d*)\s*acre/i) || line.match(/(\d+\.?\d*)/);
+            if (m) { newData.acres = m[1]; newData.squareFeet = (parseFloat(newData.acres) * SQUARE_FEET_PER_ACRE).toFixed(0); }
+          }
+        }
+        if (!newData.squareFeet && !newData.acres) {
+          if (line.includes('Lot Size:') && line.includes('/')) {
+            const m = line.match(/Lot Size:\s*([\d,]+)/);
+            if (m) { newData.squareFeet = m[1].replace(/,/g, ''); newData.acres = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4); }
+          } else if (lowerLine.includes('sq ft') || lowerLine.includes('sqft')) {
+            const m = line.match(/(\d+[,\d]*\.?\d*)\s*(sq\.?\s*ft\.?|sqft)/i);
+            if (m) { newData.squareFeet = m[1].replace(/,/g, ''); newData.acres = (parseFloat(newData.squareFeet) / SQUARE_FEET_PER_ACRE).toFixed(4); }
+          }
+        }
+        if (!newData.daysOnMarket && line.includes('DOM:') && !line.includes('LP/SF:')) {
+          const m = line.match(/DOM:\s*(\d+)/);
+          if (m) newData.daysOnMarket = m[1];
+        }
+        if (line.includes('List Date:') || lowerLine.includes('list date:')) {
+          const m = line.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+          if (m) newData.listDate = m[1];
+        }
+        if (!newData.pricePerSqFt && line.includes('LP/SF:')) {
+          const m = line.match(/LP\/SF:\s*\$?(\d+\.?\d*)/);
+          if (m) newData.pricePerSqFt = m[1];
+        }
+        if (!newData.pricePerAcre && line.includes('LP/Acre:')) {
+          const m = line.match(/LP\/Acre:\s*\$?([\d,]+\.?\d*)/);
+          if (m) newData.pricePerAcre = m[1].replace(/,/g, '');
+        }
+        if (lowerLine.includes('flood')) {
+          if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
+          else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
+          else if (lowerLine.includes('500')) newData.floodZone = FLOOD_ZONES.FIVE_HUNDRED_YEAR;
+          else if (lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR_WAY;
+          else newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR;
+        }
+      }
+      if (newData.listPrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.listPrice) / parseFloat(newData.acres)).toFixed(2);
+      }
+      if (newData.listPrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.listPrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      setActiveListing2Data(newData);
+      setActiveListing2PasteInput('');
+      setShowActiveListing2QuickInput(false);
+    } catch (error) {
+      setActiveListing2ParseError('Could not parse the input data. Please check the format and try again.');
     }
   };
 
@@ -1756,6 +2160,15 @@ export const LandCalculator: React.FC = () => {
               <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
                 <TextField
                   fullWidth
+                  label="MLS #"
+                  value={comp1Data.mlsNumber}
+                  onChange={(e) => setComp1Data({ ...comp1Data, mlsNumber: e.target.value })}
+                  placeholder="MLS number"
+                />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField
+                  fullWidth
                   label="Number of Acres"
                   type="number"
                   value={comp1Data.acres}
@@ -1989,6 +2402,9 @@ export const LandCalculator: React.FC = () => {
                   onChange={(e) => setComp2Data({ ...comp2Data, address: e.target.value })}
                   placeholder="Enter the property address"
                 />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={comp2Data.mlsNumber} onChange={(e) => setComp2Data({ ...comp2Data, mlsNumber: e.target.value })} placeholder="MLS number" />
               </Box>
               <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
                 <TextField
@@ -2228,6 +2644,9 @@ export const LandCalculator: React.FC = () => {
                 />
               </Box>
               <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={comp3Data.mlsNumber} onChange={(e) => setComp3Data({ ...comp3Data, mlsNumber: e.target.value })} placeholder="MLS number" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
                 <TextField
                   fullWidth
                   label="Number of Acres"
@@ -2391,6 +2810,122 @@ export const LandCalculator: React.FC = () => {
           </Box>
         </Box>
 
+        {/* Comp 4 Quick Input Section */}
+        <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
+          <Collapse in={showComp4QuickInput}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <ContentPasteIcon />
+                <Typography variant="subtitle1">Comp 4 Quick Input</Typography>
+                <IconButton size="small" onClick={() => setShowComp4QuickInput(false)} sx={{ ml: 'auto' }}><CloseIcon /></IconButton>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>Copy and paste comparable property details, and we'll automatically fill in the fields.</Typography>
+              <TextareaAutosize minRows={4} placeholder="Paste comparable property details here..." value={comp4PasteInput} onChange={(e) => setComp4PasteInput(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '8px', fontFamily: 'inherit', borderRadius: '4px', border: '1px solid #ccc' }} />
+              <Button variant="contained" onClick={parseComp4InputData} disabled={!comp4PasteInput} fullWidth>Parse Comp 4 Data</Button>
+              {comp4ParseError && <Alert severity="error" sx={{ mt: 1 }}>{comp4ParseError}</Alert>}
+            </Box>
+          </Collapse>
+          {!showComp4QuickInput && <Button variant="outlined" startIcon={<ContentPasteIcon />} onClick={() => setShowComp4QuickInput(true)}>Show Comp 4 Quick Input</Button>}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Comp 4 Details</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ flexGrow: 1, width: '100%' }}>
+                <TextField fullWidth label="Property Address" value={comp4Data.address} onChange={(e) => setComp4Data({ ...comp4Data, address: e.target.value })} placeholder="Enter the property address" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={comp4Data.mlsNumber} onChange={(e) => setComp4Data({ ...comp4Data, mlsNumber: e.target.value })} placeholder="MLS number" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Number of Acres" type="number" value={comp4Data.acres} onChange={(e) => { const acres = e.target.value; const sqft = acres ? (parseFloat(acres) * SQUARE_FEET_PER_ACRE).toFixed(0) : ''; setComp4Data({ ...comp4Data, acres, squareFeet: sqft }); }} InputProps={{ inputProps: { min: 0, step: '0.0001' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Square Feet" type="number" value={comp4Data.squareFeet} onChange={(e) => { const sqft = e.target.value; const acres = sqft ? (parseFloat(sqft) / SQUARE_FEET_PER_ACRE).toFixed(4) : ''; setComp4Data({ ...comp4Data, squareFeet: sqft, acres }); }} InputProps={{ inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Days on Market (DOM)" type="number" value={comp4Data.dom || ''} onChange={(e) => setComp4Data({ ...comp4Data, dom: e.target.value })} InputProps={{ inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Sale Price" type="number" value={comp4Data.salePrice} onChange={(e) => { const price = e.target.value; const sqft = comp4Data.squareFeet; const acres = comp4Data.acres; const pricePerSqFt = price && sqft ? (parseFloat(price) / parseFloat(sqft)).toFixed(2) : ''; const pricePerAcre = price && acres ? (parseFloat(price) / parseFloat(acres)).toFixed(2) : ''; setComp4Data({ ...comp4Data, salePrice: price, pricePerSqFt, pricePerAcre }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Price per Square Foot" type="number" value={comp4Data.pricePerSqFt || ''} onChange={(e) => { const pricePerSqFt = e.target.value; const sqft = comp4Data.squareFeet; if (sqft) { const calculatedPrice = pricePerSqFt ? (parseFloat(pricePerSqFt) * parseFloat(sqft)).toString() : ''; setComp4Data({ ...comp4Data, pricePerSqFt, salePrice: calculatedPrice, pricePerAcre: calculatedPrice && comp4Data.acres ? (parseFloat(calculatedPrice) / parseFloat(comp4Data.acres)).toFixed(2) : '' }); } else setComp4Data({ ...comp4Data, pricePerSqFt }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0, step: '0.01' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Price per Acre" type="number" value={comp4Data.pricePerAcre || ''} onChange={(e) => { const pricePerAcre = e.target.value; const acres = comp4Data.acres; if (acres) { const calculatedPrice = pricePerAcre ? (parseFloat(pricePerAcre) * parseFloat(acres)).toString() : ''; setComp4Data({ ...comp4Data, pricePerAcre, salePrice: calculatedPrice, pricePerSqFt: calculatedPrice && comp4Data.squareFeet ? (parseFloat(calculatedPrice) / parseFloat(comp4Data.squareFeet)).toFixed(2) : '' }); } else setComp4Data({ ...comp4Data, pricePerAcre }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0, step: '0.01' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Close Date" type="date" value={comp4Data.closeDate || ''} onChange={(e) => setComp4Data({ ...comp4Data, closeDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <FormControl fullWidth>
+                  <Select value={comp4Data.floodZone || ''} onChange={(e) => setComp4Data({ ...comp4Data, floodZone: e.target.value as FloodZoneValues })} displayEmpty>
+                    <MenuItem value="">Select flood zone</MenuItem>
+                    {Object.values(FLOOD_ZONES).map((zone) => <MenuItem key={zone} value={zone}>{zone}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Comp 5 Quick Input Section */}
+        <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
+          <Collapse in={showComp5QuickInput}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <ContentPasteIcon />
+                <Typography variant="subtitle1">Comp 5 Quick Input</Typography>
+                <IconButton size="small" onClick={() => setShowComp5QuickInput(false)} sx={{ ml: 'auto' }}><CloseIcon /></IconButton>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>Copy and paste comparable property details, and we'll automatically fill in the fields.</Typography>
+              <TextareaAutosize minRows={4} placeholder="Paste comparable property details here..." value={comp5PasteInput} onChange={(e) => setComp5PasteInput(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '8px', fontFamily: 'inherit', borderRadius: '4px', border: '1px solid #ccc' }} />
+              <Button variant="contained" onClick={parseComp5InputData} disabled={!comp5PasteInput} fullWidth>Parse Comp 5 Data</Button>
+              {comp5ParseError && <Alert severity="error" sx={{ mt: 1 }}>{comp5ParseError}</Alert>}
+            </Box>
+          </Collapse>
+          {!showComp5QuickInput && <Button variant="outlined" startIcon={<ContentPasteIcon />} onClick={() => setShowComp5QuickInput(true)}>Show Comp 5 Quick Input</Button>}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main' }}>Comp 5 Details</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ flexGrow: 1, width: '100%' }}>
+                <TextField fullWidth label="Property Address" value={comp5Data.address} onChange={(e) => setComp5Data({ ...comp5Data, address: e.target.value })} placeholder="Enter the property address" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={comp5Data.mlsNumber} onChange={(e) => setComp5Data({ ...comp5Data, mlsNumber: e.target.value })} placeholder="MLS number" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Number of Acres" type="number" value={comp5Data.acres} onChange={(e) => { const acres = e.target.value; const sqft = acres ? (parseFloat(acres) * SQUARE_FEET_PER_ACRE).toFixed(0) : ''; setComp5Data({ ...comp5Data, acres, squareFeet: sqft }); }} InputProps={{ inputProps: { min: 0, step: '0.0001' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Square Feet" type="number" value={comp5Data.squareFeet} onChange={(e) => { const sqft = e.target.value; const acres = sqft ? (parseFloat(sqft) / SQUARE_FEET_PER_ACRE).toFixed(4) : ''; setComp5Data({ ...comp5Data, squareFeet: sqft, acres }); }} InputProps={{ inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Days on Market (DOM)" type="number" value={comp5Data.dom || ''} onChange={(e) => setComp5Data({ ...comp5Data, dom: e.target.value })} InputProps={{ inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Sale Price" type="number" value={comp5Data.salePrice} onChange={(e) => { const price = e.target.value; const sqft = comp5Data.squareFeet; const acres = comp5Data.acres; const pricePerSqFt = price && sqft ? (parseFloat(price) / parseFloat(sqft)).toFixed(2) : ''; const pricePerAcre = price && acres ? (parseFloat(price) / parseFloat(acres)).toFixed(2) : ''; setComp5Data({ ...comp5Data, salePrice: price, pricePerSqFt, pricePerAcre }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0 } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Price per Square Foot" type="number" value={comp5Data.pricePerSqFt || ''} onChange={(e) => { const pricePerSqFt = e.target.value; const sqft = comp5Data.squareFeet; if (sqft) { const calculatedPrice = pricePerSqFt ? (parseFloat(pricePerSqFt) * parseFloat(sqft)).toString() : ''; setComp5Data({ ...comp5Data, pricePerSqFt, salePrice: calculatedPrice, pricePerAcre: calculatedPrice && comp5Data.acres ? (parseFloat(calculatedPrice) / parseFloat(comp5Data.acres)).toFixed(2) : '' }); } else setComp5Data({ ...comp5Data, pricePerSqFt }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0, step: '0.01' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Price per Acre" type="number" value={comp5Data.pricePerAcre || ''} onChange={(e) => { const pricePerAcre = e.target.value; const acres = comp5Data.acres; if (acres) { const calculatedPrice = pricePerAcre ? (parseFloat(pricePerAcre) * parseFloat(acres)).toString() : ''; setComp5Data({ ...comp5Data, pricePerAcre, salePrice: calculatedPrice, pricePerSqFt: calculatedPrice && comp5Data.squareFeet ? (parseFloat(calculatedPrice) / parseFloat(comp5Data.squareFeet)).toFixed(2) : '' }); } else setComp5Data({ ...comp5Data, pricePerAcre }); }} InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>, inputProps: { min: 0, step: '0.01' } }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Close Date" type="date" value={comp5Data.closeDate || ''} onChange={(e) => setComp5Data({ ...comp5Data, closeDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <FormControl fullWidth>
+                  <Select value={comp5Data.floodZone || ''} onChange={(e) => setComp5Data({ ...comp5Data, floodZone: e.target.value as FloodZoneValues })} displayEmpty>
+                    <MenuItem value="">Select flood zone</MenuItem>
+                    {Object.values(FLOOD_ZONES).map((zone) => <MenuItem key={zone} value={zone}>{zone}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
         {/* Comparable Analysis Results moved below Active Listing Section */}
 
         {/* Active Listing Section */}
@@ -2474,6 +3009,9 @@ export const LandCalculator: React.FC = () => {
                   onChange={(e) => setActiveListingData({ ...activeListingData, address: e.target.value })}
                   placeholder="Enter the property address"
                 />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={activeListingData.mlsNumber} onChange={(e) => setActiveListingData({ ...activeListingData, mlsNumber: e.target.value })} placeholder="MLS number" />
               </Box>
               <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
                 <TextField
@@ -2586,6 +3124,66 @@ export const LandCalculator: React.FC = () => {
           </Box>
         </Box>
 
+        {/* Active Listing 2 Section */}
+        <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>
+            🏠 Active Listing #2
+          </Typography>
+          <Collapse in={showActiveListing2QuickInput}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <ContentPasteIcon />
+                <Typography variant="subtitle1">Active Listing #2 Quick Input</Typography>
+                <IconButton size="small" onClick={() => setShowActiveListing2QuickInput(false)} sx={{ ml: 'auto' }}><CloseIcon /></IconButton>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>Copy and paste active listing details from MLS.</Typography>
+              <TextareaAutosize minRows={4} placeholder="Paste active listing details here..." value={activeListing2PasteInput} onChange={(e) => setActiveListing2PasteInput(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '8px', fontFamily: 'inherit', borderRadius: '4px', border: '1px solid #ccc' }} />
+              <Button variant="contained" color="warning" onClick={parseActiveListing2InputData} disabled={!activeListing2PasteInput} fullWidth>Parse Active Listing #2 Data</Button>
+              {activeListing2ParseError && <Alert severity="error" sx={{ mt: 1 }}>{activeListing2ParseError}</Alert>}
+            </Box>
+          </Collapse>
+          {!showActiveListing2QuickInput && <Button variant="outlined" color="warning" startIcon={<ContentPasteIcon />} onClick={() => setShowActiveListing2QuickInput(true)}>Show Active Listing #2 Quick Input</Button>}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ color: 'warning.main' }}>Active Listing #2 Details</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ flexGrow: 1, width: '100%' }}>
+                <TextField fullWidth label="Property Address" value={activeListing2Data.address} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, address: e.target.value })} placeholder="Enter the property address" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="MLS #" value={activeListing2Data.mlsNumber} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, mlsNumber: e.target.value })} placeholder="MLS number" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="List Price" type="number" value={activeListing2Data.listPrice} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, listPrice: e.target.value })} placeholder="Enter list price" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Days on Market" type="number" value={activeListing2Data.daysOnMarket} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, daysOnMarket: e.target.value })} placeholder="Enter days on market" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Number of Acres" type="number" value={activeListing2Data.acres} onChange={(e) => { const acres = e.target.value; const sqft = acres ? (parseFloat(acres) * SQUARE_FEET_PER_ACRE).toFixed(0) : ''; setActiveListing2Data({ ...activeListing2Data, acres, squareFeet: sqft }); }} placeholder="Enter number of acres" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="Square Feet" type="number" value={activeListing2Data.squareFeet} onChange={(e) => { const sqft = e.target.value; const acres = sqft ? (parseFloat(sqft) / SQUARE_FEET_PER_ACRE).toFixed(4) : ''; setActiveListing2Data({ ...activeListing2Data, squareFeet: sqft, acres }); }} placeholder="Enter square footage" />
+              </Box>
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+                <TextField fullWidth label="List Date" value={activeListing2Data.listDate} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, listDate: e.target.value })} placeholder="MM/DD/YYYY" />
+              </Box>
+            </Box>
+            <Card variant="outlined" sx={{ mt: 3, bgcolor: '#fff3e0', border: '1px solid', borderColor: 'warning.main' }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>Active Listing #2 Analysis</Typography>
+                {activeListing2Data.listPrice && activeListing2Data.acres && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="body2"><strong>List Price per Acre:</strong> ${(parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.acres)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Typography>
+                    <Typography variant="body2"><strong>List Price per Square Foot:</strong> ${activeListing2Data.squareFeet ? (parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.squareFeet)).toFixed(2) : '-'}</Typography>
+                    {activeListing2Data.daysOnMarket && <Typography variant="body2"><strong>Days on Market:</strong> {activeListing2Data.daysOnMarket} days</Typography>}
+                  </Box>
+                )}
+                {(!activeListing2Data.listPrice || !activeListing2Data.acres) && <Typography variant="body2" color="text.secondary">Enter list price and acreage to see analysis.</Typography>}
+              </CardContent>
+            </Card>
+          </Box>
+        </Box>
+
         {/* Comparable Analysis Results (moved to bottom under Active Listing Section) */}
         <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
           <Typography variant="h6" gutterBottom>
@@ -2666,13 +3264,49 @@ export const LandCalculator: React.FC = () => {
                       {comp3Data.pricePerAcre ? `$${parseInt(comp3Data.pricePerAcre).toLocaleString()}` : '-'}
                     </TableCell>
                   </TableRow>
+                  <TableRow>
+                    <TableCell>Comp 4</TableCell>
+                    <TableCell align="right">
+                      {comp4Data.salePrice ? `$${parseInt(comp4Data.salePrice).toLocaleString()}` : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp4Data.squareFeet ? parseInt(comp4Data.squareFeet).toLocaleString() : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp4Data.pricePerSqFt ? `$${parseFloat(comp4Data.pricePerSqFt).toFixed(2)}` : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp4Data.acres ? parseFloat(comp4Data.acres).toFixed(4) : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp4Data.pricePerAcre ? `$${parseInt(comp4Data.pricePerAcre).toLocaleString()}` : '-'}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Comp 5</TableCell>
+                    <TableCell align="right">
+                      {comp5Data.salePrice ? `$${parseInt(comp5Data.salePrice).toLocaleString()}` : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp5Data.squareFeet ? parseInt(comp5Data.squareFeet).toLocaleString() : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp5Data.pricePerSqFt ? `$${parseFloat(comp5Data.pricePerSqFt).toFixed(2)}` : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp5Data.acres ? parseFloat(comp5Data.acres).toFixed(4) : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {comp5Data.pricePerAcre ? `$${parseInt(comp5Data.pricePerAcre).toLocaleString()}` : '-'}
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
                 <TableFooter>
                   <TableRow sx={{ backgroundColor: 'grey.100' }}>
                     <TableCell><strong>Average</strong></TableCell>
                     <TableCell align="right">
                       {(() => {
-                        const validPrices = [comp1Data.salePrice, comp2Data.salePrice, comp3Data.salePrice]
+                        const validPrices = [comp1Data.salePrice, comp2Data.salePrice, comp3Data.salePrice, comp4Data.salePrice, comp5Data.salePrice]
                           .filter(price => price && !isNaN(parseFloat(price)));
                         if (validPrices.length === 0) return '-';
                         const avg = validPrices.reduce((sum, price) => sum + parseFloat(price), 0) / validPrices.length;
@@ -2681,7 +3315,7 @@ export const LandCalculator: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       {(() => {
-                        const validSqft = [comp1Data.squareFeet, comp2Data.squareFeet, comp3Data.squareFeet]
+                        const validSqft = [comp1Data.squareFeet, comp2Data.squareFeet, comp3Data.squareFeet, comp4Data.squareFeet, comp5Data.squareFeet]
                           .filter(sqft => sqft && !isNaN(parseFloat(sqft)));
                         if (validSqft.length === 0) return '-';
                         const avg = validSqft.reduce((sum, sqft) => sum + parseFloat(sqft), 0) / validSqft.length;
@@ -2690,7 +3324,7 @@ export const LandCalculator: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       {(() => {
-                        const validPrices = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt]
+                        const validPrices = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt, comp4Data.pricePerSqFt, comp5Data.pricePerSqFt]
                           .filter(price => price && !isNaN(parseFloat(price)));
                         if (validPrices.length === 0) return '-';
                         const avg = validPrices.reduce((sum, price) => sum + parseFloat(price), 0) / validPrices.length;
@@ -2699,7 +3333,7 @@ export const LandCalculator: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       {(() => {
-                        const validAcres = [comp1Data.acres, comp2Data.acres, comp3Data.acres]
+                        const validAcres = [comp1Data.acres, comp2Data.acres, comp3Data.acres, comp4Data.acres, comp5Data.acres]
                           .filter(acres => acres && !isNaN(parseFloat(acres)));
                         if (validAcres.length === 0) return '-';
                         const avg = validAcres.reduce((sum, acres) => sum + parseFloat(acres), 0) / validAcres.length;
@@ -2708,7 +3342,7 @@ export const LandCalculator: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       {(() => {
-                        const validPrices = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre]
+                        const validPrices = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre, comp4Data.pricePerAcre, comp5Data.pricePerAcre]
                           .filter(price => price && !isNaN(parseFloat(price)));
                         if (validPrices.length === 0) return '-';
                         const avg = validPrices.reduce((sum, price) => sum + parseFloat(price), 0) / validPrices.length;
@@ -2720,45 +3354,36 @@ export const LandCalculator: React.FC = () => {
               </Table>
             </Box>
 
-            {/* Analysis Card */}
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  Market Analysis Summary
-                </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  Based on the comparable properties:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Typography variant="body2">
-                    • Average Price per Square Foot: {(() => {
-                      const validPrices = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt]
-                        .filter(price => price && !isNaN(parseFloat(price)));
-                      if (validPrices.length === 0) return 'Not enough data';
-                      const avg = validPrices.reduce((sum, price) => sum + parseFloat(price), 0) / validPrices.length;
-                      return `$${avg.toFixed(2)}`;
-                    })()}
-                  </Typography>
-                  <Typography variant="body2">
-                    • Average Price per Acre: {(() => {
-                      const validPrices = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre]
-                        .filter(price => price && !isNaN(parseFloat(price)));
-                      if (validPrices.length === 0) return 'Not enough data';
-                      const avg = validPrices.reduce((sum, price) => sum + parseFloat(price), 0) / validPrices.length;
-                      return `$${avg.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-                    })()}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Box>
-          
           {/* Copy-ready Summary */}
           <Card variant="outlined">
             <CardContent>
               <Typography variant="subtitle1" gutterBottom>
                 Copy-ready Summary
               </Typography>
+              <TextField
+                fullWidth
+                label="Anchor Points"
+                placeholder="Optional anchor points"
+                value={anchorPoints}
+                onChange={(e) => setAnchorPoints(e.target.value)}
+                sx={{ mb: 1 }}
+              />
+              <TextField
+                fullWidth
+                label="Smart Notes"
+                placeholder="Smart notes for the report"
+                value={smartNotes}
+                onChange={(e) => setSmartNotes(e.target.value)}
+                sx={{ mb: 1 }}
+              />
+              <TextField
+                fullWidth
+                label="Creative Offer"
+                placeholder="Creative offer details"
+                value={creativeOffer}
+                onChange={(e) => setCreativeOffer(e.target.value)}
+                sx={{ mb: 2 }}
+              />
               <TextField
                 multiline
                 minRows={12}
@@ -2778,6 +3403,7 @@ export const LandCalculator: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
+          </Box>
         </Box>
       </CardContent>
     </Card>

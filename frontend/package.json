@@ -32,6 +32,7 @@
   "scripts": {
     "start": "CI=false react-scripts start",
     "start:3001": "PORT=3001 CI=false react-scripts start",
+    "start:3001:poll": "PORT=3001 CI=false CHOKIDAR_USEPOLLING=true react-scripts start",
     "start:poll": "CI=false CHOKIDAR_USEPOLLING=true react-scripts start",
     "build": "CI=false react-scripts build",
     "build:local": "CI=false PUBLIC_URL=/ react-scripts build",

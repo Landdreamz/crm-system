@@ -85,14 +85,15 @@ export function createAppTheme(mode: PaletteMode) {
         styleOverrides: {
           root: {
             '&.Mui-selected': {
-              background: greenGradient,
-              color: isDark ? '#fff' : colors.text,
+              background: isDark ? 'rgba(60, 186, 146, 0.12)' : 'rgba(11, 163, 96, 0.08)',
+              borderLeft: '4px solid',
+              borderLeftColor: colors.primary,
+              color: colors.primary,
               '&:hover': {
-                background: greenGradient,
-                filter: 'brightness(0.95)',
+                background: isDark ? 'rgba(60, 186, 146, 0.18)' : 'rgba(11, 163, 96, 0.12)',
               },
               '& .MuiListItemIcon-root': {
-                color: isDark ? '#fff' : colors.text,
+                color: colors.primary,
               },
             },
           },

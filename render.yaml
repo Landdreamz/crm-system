@@ -1,0 +1,17 @@
+# Render Blueprint: deploy Parcel API so the live site can use APN search.
+# In Render: New → Blueprint → connect this repo; Render will create the service from this file.
+
+services:
+  - type: web
+    name: crm-parcel-api
+    runtime: python
+    rootDir: parcel_api
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PARCEL_ARCGIS_LAYER_URL
+        sync: false
+        # Optional: set in Render dashboard. Harris County example:
+        # https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0

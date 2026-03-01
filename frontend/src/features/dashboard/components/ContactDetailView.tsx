@@ -11,7 +11,12 @@ import {
   TextField,
   InputAdornment,
   Popover,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
@@ -23,6 +28,7 @@ import {
   Delete as DeleteIcon,
   CalendarMonth as CalendarMonthIcon,
   Refresh as RefreshIcon,
+  EditOutlined as EditOutlinedIcon,
 } from '@mui/icons-material';
 import { Contact, Communication, Appointment, ContactTask } from './types';
 import PropertyMap from './PropertyMap';
@@ -45,6 +51,9 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
   const [newAppointmentTitle, setNewAppointmentTitle] = useState('');
   const [newAppointmentDate, setNewAppointmentDate] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskDueTime, setNewTaskDueTime] = useState('');
+  const [editingTask, setEditingTask] = useState<{ task: ContactTask; draft: ContactTask; anchorEl: HTMLElement } | null>(null);
   const [lastContactAnchor, setLastContactAnchor] = useState<HTMLElement | null>(null);
   const [quickEdit, setQuickEdit] = useState<{ key: string; label: string; anchorEl: HTMLElement } | null>(null);
   const [quickEditDraft, setQuickEditDraft] = useState('');
@@ -53,7 +62,13 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
   const [refreshLoading, setRefreshLoading] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const resizeRef = useRef<{ startY: number; startMapH: number } | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
 
@@ -213,8 +228,55 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
 
   const formatDate = (value: string) =>
     value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
+  const formatShortDate = (value: string) =>
+    value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
   const formatTime = (value: string) =>
     value ? new Date(value).toLocaleTimeString(undefined, { timeStyle: 'short' }) : '';
+  /** Format HH:mm or HH:mm:ss to short time (e.g. "2:30 PM"). Accepts flexible digits. */
+  const formatDueTime = (timeStr: string) => {
+    if (!timeStr || typeof timeStr !== 'string') return '';
+    const trimmed = timeStr.trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+    if (!match) return trimmed;
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10) || 0;
+    const d = new Date(2000, 0, 1, h, m, 0, 0);
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+  /** Full due date + time for display (e.g. "Sep 26, 2025 at 2:30 PM") */
+  const formatDueDateTime = (task: ContactTask) => {
+    if (task.dueDate && task.dueTime) {
+      const timeDisplay = formatDueTime(task.dueTime) || task.dueTime;
+      return `${formatDate(task.dueDate)} at ${timeDisplay}`;
+    }
+    if (task.dueDate) return formatDate(task.dueDate);
+    if (task.dueTime) return `Time: ${formatDueTime(task.dueTime) || task.dueTime}`;
+    return '';
+  };
+  /** Get due as Date for countdown; if no time, use end of day */
+  const getDueDate = (task: ContactTask): Date | null => {
+    if (!task.dueDate) return null;
+    const [y, m, d] = task.dueDate.split('-').map(Number);
+    if (task.dueTime && /^\d{1,2}:\d{2}/.test(task.dueTime)) {
+      const [h, min] = task.dueTime.split(':').map(Number);
+      return new Date(y, (m ?? 1) - 1, d ?? 1, h ?? 0, min ?? 0, 0, 0);
+    }
+    return new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 999);
+  };
+  /** Countdown text: "Due in X days, Y hours, Z minutes" or "Overdue by ..." */
+  const getCountdown = (due: Date, now: Date): string => {
+    const diffMs = due.getTime() - now.getTime();
+    const totalMins = Math.floor(Math.abs(diffMs) / 60000);
+    const days = Math.floor(totalMins / 1440);
+    const hours = Math.floor((totalMins % 1440) / 60);
+    const mins = totalMins % 60;
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+    parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+    parts.push(`${mins} minute${mins !== 1 ? 's' : ''}`);
+    const str = parts.join(', ');
+    return diffMs < 0 ? `Overdue by ${str}` : `Due in ${str}`;
+  };
 
   const handleSendMessage = () => {
     const trimmed = messageDraft.trim();
@@ -240,6 +302,13 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
 
   const appointments = contact.appointments ?? [];
   const tasks = contact.tasks ?? [];
+  const today = new Date().toISOString().slice(0, 10);
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    const aDue = a.dueDate ?? '9999-99-99';
+    const bDue = b.dueDate ?? '9999-99-99';
+    return aDue.localeCompare(bDue);
+  });
 
   const handleAddAppointment = () => {
     const title = newAppointmentTitle.trim();
@@ -267,14 +336,33 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
   const handleAddTask = () => {
     const title = newTaskTitle.trim();
     if (!title) return;
+    const dueDateVal = newTaskDueDate.trim() || undefined;
+    const dueTimeVal = newTaskDueTime.trim() || undefined;
     const task: ContactTask = {
       id: `task-${Date.now()}`,
       title,
-      dueDate: undefined,
+      dueDate: dueDateVal,
+      dueTime: dueTimeVal,
       completed: false,
     };
-    onUpdateContact({ ...contact, tasks: [...tasks, task] });
+    onUpdateContact({
+      ...contact,
+      tasks: [...tasks.map((t) => ({ ...t })), task],
+    });
     setNewTaskTitle('');
+    setNewTaskDueDate('');
+    setNewTaskDueTime('');
+  };
+
+  const handleSaveTaskEdit = () => {
+    if (!editingTask) return;
+    const { draft } = editingTask;
+    if (!draft.title.trim()) return;
+    onUpdateContact({
+      ...contact,
+      tasks: tasks.map((t) => (t.id === draft.id ? draft : t)),
+    });
+    setEditingTask(null);
   };
 
   const handleToggleTask = (id: string) => {
@@ -757,28 +845,29 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
             </Stack>
           </Paper>
 
-          {/* Tasks */}
+          {/* Tasks — aligned with Tasks tab */}
           <Paper sx={{ p: 2 }}>
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <TaskIcon fontSize="small" /> Tasks
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-              To-dos for this contact.
+              Same tasks appear on the Tasks tab. Add due dates to see them there.
             </Typography>
             <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-              {tasks.length === 0 ? (
+              {sortedTasks.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">No tasks yet.</Typography>
               ) : (
-                tasks.map((task) => (
+                sortedTasks.map((task) => (
                   <Box
                     key={task.id}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 1,
-                      py: 0.5,
+                      py: 0.75,
                       borderBottom: '1px solid',
                       borderColor: 'divider',
+                      opacity: task.completed ? 0.8 : 1,
                     }}
                   >
                     <IconButton
@@ -803,21 +892,47 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                         {task.completed && <Typography sx={{ color: 'primary.contrastText', fontSize: 12 }}>✓</Typography>}
                       </Box>
                     </IconButton>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        flex: 1,
-                        textDecoration: task.completed ? 'line-through' : 'none',
-                        color: task.completed ? 'text.secondary' : 'text.primary',
-                      }}
-                    >
-                      {task.title}
-                      {task.dueDate && (
-                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                          ({formatDate(task.dueDate)})
-                        </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          textDecoration: task.completed ? 'line-through' : 'none',
+                          color: task.completed ? 'text.secondary' : 'text.primary',
+                        }}
+                      >
+                        {task.title}
+                      </Typography>
+                      {(task.dueDate || task.dueTime) && (
+                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25 }} flexWrap="wrap">
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: task.dueDate && task.dueDate <= today ? 'error.main' : 'text.secondary',
+                            }}
+                          >
+                            Due: {formatDueDateTime(task)}
+                          </Typography>
+                          {task.dueTime && (
+                            <Chip
+                              size="small"
+                              label={formatDueTime(task.dueTime) || task.dueTime}
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.7rem' }}
+                            />
+                          )}
+                          {task.dueDate && task.dueDate < today && !task.completed && (
+                            <Chip size="small" label="Overdue" color="error" sx={{ height: 18 }} />
+                          )}
+                        </Stack>
                       )}
-                    </Typography>
+                    </Box>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => setEditingTask({ task, draft: { ...task }, anchorEl: e.currentTarget })}
+                      aria-label="Edit task"
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" color="error" onClick={() => handleDeleteTask(task.id)} aria-label="Delete">
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -825,7 +940,7 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                 ))
               )}
             </Stack>
-            <Stack direction="row" spacing={0.5}>
+            <Stack spacing={1} sx={{ mb: 1 }}>
               <TextField
                 size="small"
                 fullWidth
@@ -833,11 +948,129 @@ const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTask())}
+                inputProps={{ 'aria-label': 'Task title' }}
               />
-              <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={handleAddTask}>
-                Add
-              </Button>
+              <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                <TextField
+                  size="small"
+                  label="Due date"
+                  type="date"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 150 }}
+                  inputProps={{ 'aria-label': 'Due date' }}
+                />
+                <TextField
+                  size="small"
+                  label="Due time"
+                  type="time"
+                  value={newTaskDueTime}
+                  onChange={(e) => setNewTaskDueTime(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 120 }}
+                  inputProps={{ 'aria-label': 'Due time', step: 300 }}
+                />
+                <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={handleAddTask} sx={{ alignSelf: 'flex-end' }}>
+                  Add task
+                </Button>
+              </Stack>
             </Stack>
+            {/* Countdown to next due task */}
+            {(() => {
+              const nextDue = sortedTasks.find((t) => !t.completed && t.dueDate);
+              const dueDate = nextDue ? getDueDate(nextDue) : null;
+              if (!dueDate) return null;
+              const countdownText = getCountdown(dueDate, now);
+              const isOverdue = dueDate.getTime() < now.getTime();
+              return (
+                <Box
+                  sx={{
+                    mt: 2,
+                    pt: 1.5,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                    Next due: {nextDue!.title}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    sx={{ color: isOverdue ? 'error.main' : 'primary.main' }}
+                  >
+                    {countdownText}
+                  </Typography>
+                </Box>
+              );
+            })()}
+
+            {/* Edit task popover — same fields as Tasks tab */}
+            <Popover
+              open={Boolean(editingTask)}
+              anchorEl={editingTask?.anchorEl}
+              onClose={() => setEditingTask(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+              {editingTask && (
+                <Box sx={{ p: 2, minWidth: 260 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TaskIcon fontSize="small" /> Edit task
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Title"
+                      fullWidth
+                      value={editingTask.draft.title}
+                      onChange={(e) => setEditingTask((prev) => prev ? { ...prev, draft: { ...prev.draft, title: e.target.value } } : null)}
+                    />
+                    <TextField
+                      size="small"
+                      label="Due date"
+                      type="date"
+                      fullWidth
+                      value={editingTask.draft.dueDate ?? ''}
+                      onChange={(e) => setEditingTask((prev) => prev ? { ...prev, draft: { ...prev.draft, dueDate: e.target.value || undefined } } : null)}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ 'aria-label': 'Task due date' }}
+                    />
+                    <TextField
+                      size="small"
+                      label="Due time"
+                      type="time"
+                      fullWidth
+                      value={editingTask.draft.dueTime ?? ''}
+                      onChange={(e) => setEditingTask((prev) => prev ? { ...prev, draft: { ...prev.draft, dueTime: e.target.value || undefined } } : null)}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ 'aria-label': 'Task due time', step: 300 }}
+                    />
+                    <FormControl size="small" fullWidth>
+                      <InputLabel>Completed</InputLabel>
+                      <Select
+                        label="Completed"
+                        value={editingTask.draft.completed ? 'yes' : 'no'}
+                        onChange={(e: SelectChangeEvent<string>) =>
+                          setEditingTask((prev) =>
+                            prev ? { ...prev, draft: { ...prev.draft, completed: e.target.value === 'yes' } } : null
+                          )
+                        }
+                      >
+                        <MenuItem value="no">No</MenuItem>
+                        <MenuItem value="yes">Yes</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Button size="small" onClick={() => setEditingTask(null)}>Cancel</Button>
+                      <Button size="small" variant="contained" onClick={handleSaveTaskEdit}>Save</Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+              )}
+            </Popover>
           </Paper>
         </Stack>
       </Box>

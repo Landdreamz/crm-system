@@ -27,6 +27,10 @@ jobs:
 
       - name: Install and build
         working-directory: frontend
+        env:
+          # Optional: set in repo Settings → Secrets and variables → Actions → Variables
+          # so the live site can call your deployed Parcel API (e.g. on Render).
+          REACT_APP_PARCEL_API_URL: ${{ vars.REACT_APP_PARCEL_API_URL }}
         run: |
           npm ci
           npm run build
