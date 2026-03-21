@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import type { PaletteMode } from '@mui/material/styles';
+type PaletteMode = 'light' | 'dark';
 
 const THEME_MODE_KEY = 'crmThemeMode';
 
@@ -10,7 +10,7 @@ function loadThemeMode(): PaletteMode {
   } catch {
     /* ignore */
   }
-  return 'light';
+  return 'dark';
 }
 
 function saveThemeMode(mode: PaletteMode) {

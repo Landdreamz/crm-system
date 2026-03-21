@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Button, Paper } from '@mui/material';
+import { Box, Typography, Button, Paper, useTheme } from '@mui/material';
 
 const AUTH_STORAGE_KEY = 'dealvision_authenticated';
 
@@ -19,6 +19,9 @@ interface LoginPageProps {
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onEnter }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+
   const handleEnter = () => {
     setAuthenticated(true);
     onEnter();
@@ -31,38 +34,43 @@ const LoginPage: React.FC<LoginPageProps> = ({ onEnter }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0ba360 0%, #3cba92 50%, #5dd4a8 100%)',
         p: 2,
+        bgcolor: 'background.default',
+        backgroundImage: isDark
+          ? 'radial-gradient(ellipse 120% 80% at 50% -20%, rgba(59, 130, 246, 0.18), transparent 55%)'
+          : 'radial-gradient(ellipse 120% 80% at 50% -20%, rgba(11, 163, 96, 0.12), transparent 55%)',
       }}
     >
       <Paper
-        elevation={8}
+        elevation={0}
         sx={{
-          p: 4,
+          p: { xs: 3, sm: 4 },
           maxWidth: 420,
           width: '100%',
           textAlign: 'center',
-          borderRadius: 2,
+          borderRadius: 3,
+          border: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
         }}
       >
-        <Typography variant="h4" fontWeight={700} color="primary.dark" gutterBottom>
-          Deal Vision
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          CRM
-        </Typography>
-        <Button
-          variant="contained"
-          size="large"
-          fullWidth
-          onClick={handleEnter}
+        <Typography
+          variant="h4"
           sx={{
-            py: 1.5,
-            fontSize: '1.1rem',
-            textTransform: 'none',
-            fontWeight: 600,
+            fontWeight: 800,
+            letterSpacing: '-0.04em',
+            mb: 0.5,
           }}
         >
+          Deal Vision
+          <Typography component="span" sx={{ fontWeight: 600, color: 'primary.main', ml: 0.5 }}>
+            CRM
+          </Typography>
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Sign in to your workspace
+        </Typography>
+        <Button variant="contained" color="primary" size="large" fullWidth onClick={handleEnter} sx={{ py: 1.25, fontSize: '1rem' }}>
           Enter
         </Button>
       </Paper>

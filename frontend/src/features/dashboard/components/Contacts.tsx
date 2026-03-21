@@ -343,13 +343,32 @@ const defaultContacts: Contact[] = [
   { id: 2, name: 'Jane Smith', email: 'jane.smith@example.com', phone: '+1 (555) 234-5678', company: 'Design Co', status: 'Lead', lastContact: '2024-03-14' },
 ];
 
+function normalizeLoadedContacts(list: Contact[]): Contact[] {
+  let maxId = 0;
+  const rows = list.map((c) => {
+    const n = typeof c.id === 'number' ? c.id : Number(c.id);
+    if (Number.isFinite(n) && n >= 1) {
+      const id = Math.floor(n);
+      maxId = Math.max(maxId, id);
+      return { c, id };
+    }
+    return { c, id: NaN };
+  });
+  let nextFallback = maxId + 1;
+  return rows.map(({ c, id }) => {
+    if (Number.isFinite(id)) return { ...c, id };
+    const fallback = nextFallback++;
+    return { ...c, id: fallback };
+  });
+}
+
 export function loadContacts(crmId: string): Contact[] {
   try {
     const key = getContactsStorageKey(crmId);
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
     if (raw) {
       const parsed = JSON.parse(raw) as Contact[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return normalizeLoadedContacts(parsed);
     }
   } catch {
     /* ignore */

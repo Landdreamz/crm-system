@@ -21,6 +21,8 @@ import {
   FormControl,
   InputLabel,
   TextField,
+  Snackbar,
+  Alert,
   Table,
   TableBody,
   TableCell,
@@ -28,6 +30,7 @@ import {
   TableHead,
   TableRow,
   Stack,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,7 +44,8 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
-import type { Contact, PipelineStage } from './types';
+import type { Contact, NewContact, PipelineStage } from './types';
+import AddContactDialog from './AddContactDialog';
 
 const CARD_FIELDS_STORAGE_KEY_PREFIX = 'crmPipelineCardFields';
 const PIPELINES_STORAGE_KEY_PREFIX = 'crmPipelines';
@@ -52,45 +56,6 @@ const SPREADSHEET_VISIBLE_COLUMNS_KEY_PREFIX = 'crmPipelineSpreadsheetVisibleCol
 
 function getStorageKey(prefix: string, crmId: string) {
   return `${prefix}_${crmId}`;
-}
-
-const CARD_FIELD_OPTIONS: { key: keyof Contact | string; label: string }[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'company', label: 'Company' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'status', label: 'Status' },
-  { key: 'leadOwner', label: 'Lead Owner' },
-  { key: 'lastContact', label: 'Last Contact' },
-  { key: 'address', label: 'Address' },
-  { key: 'city', label: 'City' },
-  { key: 'state', label: 'State' },
-  { key: 'zip', label: 'Zip' },
-  { key: 'county', label: 'County' },
-  { key: 'salesPrice', label: 'Sales Price' },
-  { key: 'salesDate', label: 'Sales Date' },
-];
-
-function loadCardFields(crmId: string): string[] {
-  try {
-    const key = getStorageKey(CARD_FIELDS_STORAGE_KEY_PREFIX, crmId);
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (raw) {
-      const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return ['name', 'company', 'phone', 'email', 'leadOwner'];
-}
-
-function saveCardFields(fields: string[], crmId: string) {
-  try {
-    localStorage.setItem(getStorageKey(CARD_FIELDS_STORAGE_KEY_PREFIX, crmId), JSON.stringify(fields));
-  } catch {
-    /* ignore */
-  }
 }
 
 export interface StageDef {
@@ -178,28 +143,6 @@ function loadCurrentPipelineId(pipelines: PipelineItem[], crmId: string): string
 function saveCurrentPipelineId(id: string, crmId: string) {
   try {
     localStorage.setItem(getStorageKey(CURRENT_PIPELINE_KEY_PREFIX, crmId), id);
-  } catch {
-    /* ignore */
-  }
-}
-
-function loadOpportunitiesColumns(crmId: string): string[] {
-  try {
-    const key = getStorageKey(OPPORTUNITIES_COLUMNS_KEY_PREFIX, crmId);
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (raw) {
-      const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return ['name', 'company', 'email', 'phone', 'leadOwner', 'status', 'lastContact', 'address', 'city', 'state', 'zip', 'salesPrice', 'salesDate'];
-}
-
-function saveOpportunitiesColumns(fields: string[], crmId: string) {
-  try {
-    localStorage.setItem(getStorageKey(OPPORTUNITIES_COLUMNS_KEY_PREFIX, crmId), JSON.stringify(fields));
   } catch {
     /* ignore */
   }
@@ -319,6 +262,91 @@ const SPREADSHEET_COLUMN_LABELS: Record<SpreadsheetColumnId, string> = {
   lastContact: 'Last Contact',
 };
 
+const EXTRA_CARD_FIELD_OPTIONS: { key: string; label: string }[] = [
+  { key: 'askingPrice', label: 'Asking Price' },
+  { key: 'notes', label: 'Notes' },
+  { key: 'gohlId', label: 'GoHighLevel ID' },
+  { key: 'alsoInCrmIds', label: 'Also in CRMs' },
+];
+
+/** Fields you can show on pipeline face cards and in the Opportunities detail panel. */
+const CARD_FIELD_OPTIONS: { key: string; label: string }[] = [
+  ...DEFAULT_SPREADSHEET_COLUMN_ORDER.map((key) => ({ key, label: SPREADSHEET_COLUMN_LABELS[key] })),
+  ...EXTRA_CARD_FIELD_OPTIONS,
+];
+
+const VALID_CARD_FIELD_KEY_SET = new Set(CARD_FIELD_OPTIONS.map((o) => o.key));
+
+const OPPORTUNITIES_FIELD_LABELS: Record<string, string> = Object.fromEntries(
+  CARD_FIELD_OPTIONS.map((o) => [o.key, o.label])
+);
+
+function loadCardFields(crmId: string): string[] {
+  const fallback = ['name', 'company', 'phone', 'email', 'leadOwner'];
+  try {
+    const key = getStorageKey(CARD_FIELDS_STORAGE_KEY_PREFIX, crmId);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const filtered = parsed.filter((k) => VALID_CARD_FIELD_KEY_SET.has(k));
+        if (filtered.length > 0) return filtered;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function saveCardFields(fields: string[], crmId: string) {
+  try {
+    localStorage.setItem(getStorageKey(CARD_FIELDS_STORAGE_KEY_PREFIX, crmId), JSON.stringify(fields));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadOpportunitiesColumns(crmId: string): string[] {
+  const defaultCols = [
+    'name',
+    'company',
+    'email',
+    'phone',
+    'leadOwner',
+    'status',
+    'lastContact',
+    'address',
+    'city',
+    'state',
+    'zip',
+    'salesPrice',
+    'salesDate',
+  ];
+  try {
+    const key = getStorageKey(OPPORTUNITIES_COLUMNS_KEY_PREFIX, crmId);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const filtered = parsed.filter((k) => VALID_CARD_FIELD_KEY_SET.has(k));
+        if (filtered.length > 0) return filtered;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return defaultCols;
+}
+
+function saveOpportunitiesColumns(fields: string[], crmId: string) {
+  try {
+    localStorage.setItem(getStorageKey(OPPORTUNITIES_COLUMNS_KEY_PREFIX, crmId), JSON.stringify(fields));
+  } catch {
+    /* ignore */
+  }
+}
+
 const TEMPERATURE_OPTIONS = ['Hot', 'Warm', 'Cold'] as const;
 
 function loadSpreadsheetColumnOrder(crmId: string): SpreadsheetColumnId[] {
@@ -376,8 +404,14 @@ function saveSpreadsheetVisibleColumns(ids: SpreadsheetColumnId[], crmId: string
 
 const SPREADSHEET_DATE_COLUMNS: SpreadsheetColumnId[] = ['lastContact', 'salesDate', 'taxDelinquentYear'];
 
-function getSpreadsheetSortValue(contact: Contact, columnId: SpreadsheetColumnId, pipelineId: string, firstStageId: string = 'Lead'): string | number | null {
-  if (columnId === 'stage') return getContactStageForPipeline(contact, pipelineId, firstStageId).toLowerCase();
+function getSpreadsheetSortValue(
+  contact: Contact,
+  columnId: SpreadsheetColumnId,
+  pipelineId: string,
+  firstStageId: string = 'Lead',
+  pipelines?: PipelineItem[]
+): string | number | null {
+  if (columnId === 'stage') return getContactStageForPipeline(contact, pipelineId, firstStageId, pipelines).toLowerCase();
   if (columnId === 'tags') return (contact.tags ?? []).join(', ').toLowerCase();
   if (SPREADSHEET_DATE_COLUMNS.includes(columnId)) {
     const v = (contact as unknown as Record<string, unknown>)[columnId];
@@ -391,9 +425,23 @@ function getSpreadsheetSortValue(contact: Contact, columnId: SpreadsheetColumnId
   return String(v).toLowerCase();
 }
 
-function formatCardValue(contact: Contact, key: string): string {
+export type CardFieldFormatCtx = {
+  pipelineId: string;
+  defaultStageId: string;
+  pipelines: PipelineItem[];
+};
+
+function formatCardField(contact: Contact, key: string, ctx?: CardFieldFormatCtx): string {
+  if (key === 'stage' && ctx) {
+    return getContactStageForPipeline(contact, ctx.pipelineId, ctx.defaultStageId, ctx.pipelines);
+  }
+  if (key === 'alsoInCrmIds') {
+    const ids = contact.alsoInCrmIds ?? [];
+    return ids.length ? ids.join(', ') : '—';
+  }
   const v = (contact as unknown as Record<string, unknown>)[key];
   if (v == null || v === '') return '—';
+  if (Array.isArray(v)) return v.length ? v.map((x) => String(x)).join(', ') : '—';
   if (key === 'lastContact' || key === 'salesDate') {
     try {
       return new Date(String(v)).toLocaleDateString();
@@ -401,9 +449,19 @@ function formatCardValue(contact: Contact, key: string): string {
       return String(v);
     }
   }
-  if (key === 'salesPrice') {
+  if (
+    key === 'salesPrice' ||
+    key === 'askingPrice' ||
+    key === 'estimatedValue' ||
+    key === 'totalAssessedValue' ||
+    key === 'taxAmountDue'
+  ) {
     const n = Number(String(v).replace(/[^0-9.-]/g, ''));
     return Number.isNaN(n) ? String(v) : `$${n.toLocaleString()}`;
+  }
+  if (key === 'notes') {
+    const s = String(v).replace(/\s+/g, ' ').trim();
+    return s.length > 140 ? `${s.slice(0, 140)}…` : s;
   }
   return String(v);
 }
@@ -411,6 +469,8 @@ function formatCardValue(contact: Contact, key: string): string {
 export interface PipelineManagementProps {
   contacts: Contact[];
   onUpdateContact: (contact: Contact) => void;
+  /** Create a new contact and assign them to the given pipeline stage (optional but recommended from the dashboard). */
+  onCreateContactForStage?: (newContact: NewContact, pipelineId: string, stageId: string) => void;
   onOpenContact?: (contactId: number) => void;
   crmId?: string;
   /** List of CRMs (e.g. ACQ, Dispo) for "Add to another CRM" in Opportunities */
@@ -419,15 +479,39 @@ export interface PipelineManagementProps {
   onAddContactToOtherCrm?: (contact: Contact, targetCrmId: string) => void;
 }
 
-const OPPORTUNITIES_FIELD_LABELS: Record<string, string> = Object.fromEntries(
-  CARD_FIELD_OPTIONS.map((o) => [o.key, o.label])
-);
-
-function getContactStageForPipeline(contact: Contact, pipelineId: string, firstStageId: string = 'Lead'): string {
-  return contact.pipelineStages?.[pipelineId] ?? contact.pipelineStage ?? firstStageId;
+/** True if contact is assigned to this pipeline (by id or by matching pipeline title — legacy data). */
+function contactBelongsToPipeline(contact: Contact, pipelineId: string, pipelines: PipelineItem[]): boolean {
+  const raw = contact.pipeline;
+  if (raw == null || String(raw).trim() === '') return false;
+  const s = String(raw).trim();
+  if (s === pipelineId) return true;
+  const pip = pipelines.find((p) => p.id === pipelineId);
+  if (pip && s.toLowerCase() === pip.title.toLowerCase()) return true;
+  return false;
 }
 
-function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: crmIdProp = 'acq', crms = [], onAddContactToOtherCrm }: PipelineManagementProps) {
+function getContactStageForPipeline(
+  contact: Contact,
+  pipelineId: string,
+  firstStageId: string = 'Lead',
+  pipelines?: PipelineItem[]
+): string {
+  const ps = contact.pipelineStages;
+  if (ps?.[pipelineId]) return ps[pipelineId];
+  const pip = pipelines?.find((p) => p.id === pipelineId);
+  if (pip && ps?.[pip.title]) return ps[pip.title];
+  return contact.pipelineStage ?? firstStageId;
+}
+
+function PipelineManagement({
+  contacts,
+  onUpdateContact,
+  onCreateContactForStage,
+  onOpenContact,
+  crmId: crmIdProp = 'acq',
+  crms = [],
+  onAddContactToOtherCrm,
+}: PipelineManagementProps) {
   const crmId = crmIdProp ?? 'acq';
   const [pipelines, setPipelines] = useState<PipelineItem[]>(() => loadPipelines(crmId));
   const [currentPipelineId, setCurrentPipelineIdState] = useState<string>(() => loadCurrentPipelineId(loadPipelines(crmId), crmId));
@@ -438,6 +522,7 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
   const [opportunitiesColumns, setOpportunitiesColumns] = useState<string[]>(() => loadOpportunitiesColumns(crmId));
   const [opportunitiesColumnsAnchor, setOpportunitiesColumnsAnchor] = useState<HTMLElement | null>(null);
   const [cardFieldsInDialogAnchor, setCardFieldsInDialogAnchor] = useState<HTMLElement | null>(null);
+  const [cardFieldsToolbarAnchor, setCardFieldsToolbarAnchor] = useState<HTMLElement | null>(null);
   const [addPipelineOpen, setAddPipelineOpen] = useState(false);
   const [newPipelineTitle, setNewPipelineTitle] = useState('');
   const [addStageOpen, setAddStageOpen] = useState(false);
@@ -455,6 +540,15 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
   const [editingSpreadsheetCell, setEditingSpreadsheetCell] = useState<{ contact: Contact; columnId: SpreadsheetColumnId; anchorEl: HTMLElement } | null>(null);
   const [spreadsheetCellEditDraft, setSpreadsheetCellEditDraft] = useState('');
   const didJustDragRef = useRef(false);
+  /** Stage to add/move a contact into (via column + button) */
+  const [addContactToStage, setAddContactToStage] = useState<{ stageId: string; label: string } | null>(null);
+  const [addContactSearch, setAddContactSearch] = useState('');
+  const [addContactSnackbar, setAddContactSnackbar] = useState<string | null>(null);
+  const [quickCreateName, setQuickCreateName] = useState('');
+  const [quickCreateEmail, setQuickCreateEmail] = useState('');
+  const [quickCreatePhone, setQuickCreatePhone] = useState('');
+  const [quickCreateCompany, setQuickCreateCompany] = useState('');
+  const [opportunitiesEditOpen, setOpportunitiesEditOpen] = useState(false);
 
   React.useEffect(() => {
     setPipelines(loadPipelines(crmId));
@@ -472,8 +566,8 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
 
   /** Contacts that belong to the current pipeline only (one pipeline per contact). */
   const contactsInCurrentPipeline = React.useMemo(
-    () => contacts.filter((c) => c.pipeline === currentPipelineId),
-    [contacts, currentPipelineId]
+    () => contacts.filter((c) => contactBelongsToPipeline(c, currentPipelineId, pipelines)),
+    [contacts, currentPipelineId, pipelines]
   );
 
   const setCurrentPipelineId = useCallback((id: string) => {
@@ -483,8 +577,10 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
 
   const contactsByStage = useCallback(
     (stageId: string) =>
-      contactsInCurrentPipeline.filter((c) => getContactStageForPipeline(c, currentPipelineId, defaultStageId) === stageId),
-    [contactsInCurrentPipeline, currentPipelineId, defaultStageId]
+      contactsInCurrentPipeline.filter(
+        (c) => getContactStageForPipeline(c, currentPipelineId, defaultStageId, pipelines) === stageId
+      ),
+    [contactsInCurrentPipeline, currentPipelineId, defaultStageId, pipelines]
   );
 
   const handleDragStart = (e: React.DragEvent, contact: Contact) => {
@@ -517,7 +613,7 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
       const data = JSON.parse(e.dataTransfer.getData('application/json') || '{}') as { contactId?: number };
       const contactId = data.contactId;
       if (contactId == null) return;
-      const contact = contacts.find((c) => c.id === contactId);
+      const contact = contacts.find((c) => String(c.id) === String(contactId));
       if (contact) {
         onUpdateContact({
           ...contact,
@@ -591,6 +687,24 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
     setOpportunitiesContact(contact);
   };
 
+  const moveOpportunitiesContactToStage = useCallback(
+    (stageId: string, stageLabel: string) => {
+      if (!opportunitiesContact) return;
+      const c = opportunitiesContact;
+      const canonical = contacts.find((x) => String(x.id) === String(c.id)) ?? c;
+      const updated: Contact = {
+        ...canonical,
+        pipeline: currentPipelineId,
+        pipelineStages: { ...(canonical.pipelineStages ?? {}), [currentPipelineId]: stageId },
+        pipelineStage: stageId,
+      };
+      onUpdateContact(updated);
+      setOpportunitiesContact(updated);
+      setAddContactSnackbar(`Placed on ${stageLabel}`);
+    },
+    [opportunitiesContact, contacts, currentPipelineId, onUpdateContact]
+  );
+
   const handleSpreadsheetStageChange = (contact: Contact, stageId: string) => {
     onUpdateContact({
       ...contact,
@@ -599,6 +713,103 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
       pipelineStage: stageId,
     });
   };
+
+  /** Contacts that can be placed in `stageId`: not on this pipeline yet, or on pipeline but in another stage */
+  const contactsAvailableForStage = React.useMemo(() => {
+    if (!addContactToStage) return [];
+    const { stageId } = addContactToStage;
+    return contacts.filter((c) => {
+      const onThisPipeline = contactBelongsToPipeline(c, currentPipelineId, pipelines);
+      const currentStage = getContactStageForPipeline(c, currentPipelineId, defaultStageId, pipelines);
+      if (!onThisPipeline) return true;
+      return currentStage !== stageId;
+    });
+  }, [contacts, addContactToStage, currentPipelineId, defaultStageId, pipelines]);
+
+  const filteredContactsForAdd = React.useMemo(() => {
+    const q = addContactSearch.trim().toLowerCase();
+    if (!q) return contactsAvailableForStage;
+    return contactsAvailableForStage.filter((c) => {
+      const hay = [c.name, c.company, c.email, c.phone].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [contactsAvailableForStage, addContactSearch]);
+
+  const resetAddToStageDialogFields = useCallback(() => {
+    setAddContactSearch('');
+    setQuickCreateName('');
+    setQuickCreateEmail('');
+    setQuickCreatePhone('');
+    setQuickCreateCompany('');
+  }, []);
+
+  /** Board column + sits under this modal — use header + to open the add flow instead. */
+  const handleOpportunitiesAddContactClick = useCallback(() => {
+    const st = currentStages[0];
+    if (!st) return;
+    resetAddToStageDialogFields();
+    setOpportunitiesContact(null);
+    // Defer opening the second modal so the Opportunities dialog fully tears down (avoids lost / blocked add dialog).
+    const stageId = st.id;
+    const label = st.label;
+    window.setTimeout(() => {
+      setAddContactToStage({ stageId, label });
+    }, 0);
+  }, [currentStages, resetAddToStageDialogFields]);
+
+  const assignContactToStage = useCallback(
+    (contact: Contact, stageId: string, stageLabel: string) => {
+      const canonical = contacts.find((c) => String(c.id) === String(contact.id));
+      if (!canonical) {
+        setAddContactSnackbar('That contact is no longer in your list. Close this dialog and try again.');
+        return;
+      }
+      const name = (canonical.name || 'Contact').trim() || 'Contact';
+      const updated: Contact = {
+        ...canonical,
+        pipeline: currentPipelineId,
+        pipelineStages: { ...(canonical.pipelineStages ?? {}), [currentPipelineId]: stageId },
+        pipelineStage: stageId,
+      };
+      onUpdateContact(updated);
+      setAddContactToStage(null);
+      resetAddToStageDialogFields();
+      setAddContactSnackbar(`Added ${name} to ${stageLabel}`);
+    },
+    [contacts, currentPipelineId, onUpdateContact, resetAddToStageDialogFields]
+  );
+
+  const handleQuickCreateForStage = useCallback(() => {
+    if (!addContactToStage || !onCreateContactForStage) return;
+    const name = quickCreateName.trim();
+    if (!name) {
+      setAddContactSnackbar('Enter a name to create a contact.');
+      return;
+    }
+    const stageLabel = addContactToStage.label;
+    const stageId = addContactToStage.stageId;
+    const base: NewContact = {
+      name,
+      email: quickCreateEmail.trim() || '—',
+      phone: quickCreatePhone.trim() || '—',
+      company: quickCreateCompany.trim() || '',
+      status: 'Lead',
+      lastContact: new Date().toISOString().slice(0, 10),
+    };
+    onCreateContactForStage(base, currentPipelineId, stageId);
+    setAddContactToStage(null);
+    resetAddToStageDialogFields();
+    setAddContactSnackbar(`Created ${name} in ${stageLabel}`);
+  }, [
+    addContactToStage,
+    onCreateContactForStage,
+    quickCreateName,
+    quickCreateEmail,
+    quickCreatePhone,
+    quickCreateCompany,
+    currentPipelineId,
+    resetAddToStageDialogFields,
+  ]);
 
   const openSpreadsheetCellEdit = (contact: Contact, columnId: SpreadsheetColumnId, e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
@@ -702,15 +913,15 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
     if (!spreadsheetSortBy) return contactsInCurrentPipeline;
     const dir = spreadsheetSortDirection === 'asc' ? 1 : -1;
     return [...contactsInCurrentPipeline].sort((a, b) => {
-      const va = getSpreadsheetSortValue(a, spreadsheetSortBy, currentPipelineId, defaultStageId);
-      const vb = getSpreadsheetSortValue(b, spreadsheetSortBy, currentPipelineId, defaultStageId);
+      const va = getSpreadsheetSortValue(a, spreadsheetSortBy, currentPipelineId, defaultStageId, pipelines);
+      const vb = getSpreadsheetSortValue(b, spreadsheetSortBy, currentPipelineId, defaultStageId, pipelines);
       if (va == null && vb == null) return 0;
       if (va == null) return 1 * dir;
       if (vb == null) return -1 * dir;
       if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
       return String(va).localeCompare(String(vb), undefined, { numeric: true }) * dir;
     });
-  }, [contactsInCurrentPipeline, spreadsheetSortBy, spreadsheetSortDirection, currentPipelineId, defaultStageId]);
+  }, [contactsInCurrentPipeline, spreadsheetSortBy, spreadsheetSortDirection, currentPipelineId, defaultStageId, pipelines]);
 
   return (
     <Box sx={{ flexGrow: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -798,6 +1009,49 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
               </Popover>
             </>
           )}
+          {viewMode === 'board' && (
+            <>
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<CardFieldsIcon />}
+                onClick={(e) => setCardFieldsToolbarAnchor(e.currentTarget)}
+              >
+                Face card fields
+              </Button>
+              <Popover
+                open={Boolean(cardFieldsToolbarAnchor)}
+                anchorEl={cardFieldsToolbarAnchor}
+                onClose={() => setCardFieldsToolbarAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                <Box sx={{ p: 2, minWidth: 260, maxWidth: 380 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Pipeline card face
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    Name stays on top. Check any contact fields to show under it (saved per CRM).
+                  </Typography>
+                  <FormGroup sx={{ maxHeight: 360, overflowY: 'auto' }}>
+                    {CARD_FIELD_OPTIONS.map(({ key, label }) => (
+                      <FormControlLabel
+                        key={key}
+                        control={
+                          <Checkbox
+                            checked={cardFields.includes(key)}
+                            onChange={(_, checked) => handleCardFieldsChange(key, checked)}
+                            size="small"
+                          />
+                        }
+                        label={label}
+                      />
+                    ))}
+                  </FormGroup>
+                </Box>
+              </Popover>
+            </>
+          )}
           <Button
             variant={viewMode === 'spreadsheet' ? 'contained' : 'outlined'}
             size="medium"
@@ -811,16 +1065,62 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
 
       <Dialog
         open={Boolean(opportunitiesContact)}
-        onClose={() => setOpportunitiesContact(null)}
+        onClose={() => {
+          setOpportunitiesEditOpen(false);
+          setOpportunitiesContact(null);
+        }}
         maxWidth="sm"
         fullWidth
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-          <span>Opportunities Section</span>
-          <IconButton size="small" onClick={() => setOpportunitiesContact(null)} aria-label="Close">
-            <CloseIcon />
-          </IconButton>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+          <Typography component="span" variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Opportunities Section
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <Tooltip title="Edit contact details (same form as Contacts)">
+              <span>
+                <IconButton
+                  type="button"
+                  size="small"
+                  color="primary"
+                  aria-label="Edit contact"
+                  onClick={() => {
+                    if (!opportunitiesContact) return;
+                    const latest = contacts.find((c) => String(c.id) === String(opportunitiesContact.id));
+                    setOpportunitiesContact(latest ?? opportunitiesContact);
+                    setOpportunitiesEditOpen(true);
+                  }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Add a contact to this pipeline (starts with the first stage). The + on the board is hidden behind this panel.">
+              <span>
+                <IconButton
+                  type="button"
+                  size="small"
+                  color="primary"
+                  aria-label="Add contact to pipeline"
+                  onClick={handleOpportunitiesAddContactClick}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <IconButton
+              type="button"
+              size="small"
+              onClick={() => {
+                setOpportunitiesEditOpen(false);
+                setOpportunitiesContact(null);
+              }}
+              aria-label="Close"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
         </DialogTitle>
         <DialogContent dividers>
           {opportunitiesContact && (
@@ -828,6 +1128,34 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 {opportunitiesContact.name}
               </Typography>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  {`Assign to a stage on "${currentPipeline?.title ?? '—'}"`}
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                  {currentStages.map((s) => {
+                    const onPipe = contactBelongsToPipeline(opportunitiesContact, currentPipelineId, pipelines);
+                    const stageNow = getContactStageForPipeline(
+                      opportunitiesContact,
+                      currentPipelineId,
+                      defaultStageId,
+                      pipelines
+                    );
+                    const isHere = onPipe && stageNow === s.id;
+                    return (
+                      <Button
+                        key={s.id}
+                        size="small"
+                        variant={isHere ? 'contained' : 'outlined'}
+                        color="primary"
+                        onClick={() => moveOpportunitiesContactToStage(s.id, s.label)}
+                      >
+                        {s.label}
+                      </Button>
+                    );
+                  })}
+                </Stack>
+              </Box>
               {crms.length > 0 && (
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
@@ -873,7 +1201,7 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   startIcon={<CardFieldsIcon />}
                   onClick={(e) => setOpportunitiesColumnsAnchor(e.currentTarget)}
                 >
-                  Choose columns to display
+                  This panel (detail)
                 </Button>
                 <Button
                   variant="outlined"
@@ -881,7 +1209,7 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   startIcon={<CardFieldsIcon />}
                   onClick={(e) => setCardFieldsInDialogAnchor(e.currentTarget)}
                 >
-                  Fields to Display on Contact Card
+                  Pipeline face cards
                 </Button>
                 <Popover
                   open={Boolean(opportunitiesColumnsAnchor)}
@@ -890,9 +1218,14 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                   transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 >
-                  <Box sx={{ p: 2, minWidth: 220 }}>
-                    <Typography variant="subtitle2" gutterBottom>Show in Opportunities</Typography>
-                    <FormGroup>
+                  <Box sx={{ p: 2, minWidth: 260, maxWidth: 400 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Fields in this Opportunities panel
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Any contact field (scroll the list).
+                    </Typography>
+                    <FormGroup sx={{ maxHeight: 360, overflowY: 'auto' }}>
                       {CARD_FIELD_OPTIONS.map(({ key, label }) => (
                         <FormControlLabel
                           key={key}
@@ -916,9 +1249,14 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                   transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 >
-                  <Box sx={{ p: 2, minWidth: 220 }}>
-                    <Typography variant="subtitle2" gutterBottom>Show on contact cards</Typography>
-                    <FormGroup>
+                  <Box sx={{ p: 2, minWidth: 260, maxWidth: 400 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Pipeline board face cards
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Same as toolbar “Face card fields”. Name stays as the title.
+                    </Typography>
+                    <FormGroup sx={{ maxHeight: 360, overflowY: 'auto' }}>
                       {CARD_FIELD_OPTIONS.map(({ key, label }) => (
                         <FormControlLabel
                           key={key}
@@ -944,7 +1282,11 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                         {OPPORTUNITIES_FIELD_LABELS[key] ?? key}
                       </Typography>
                       <Typography variant="body2" fontWeight={500} sx={{ textAlign: 'right' }}>
-                        {formatCardValue(opportunitiesContact, key)}
+                        {formatCardField(opportunitiesContact, key, {
+                          pipelineId: currentPipelineId,
+                          defaultStageId,
+                          pipelines,
+                        })}
                       </Typography>
                     </Box>
                   ))}
@@ -954,6 +1296,18 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
           )}
         </DialogContent>
       </Dialog>
+
+      <AddContactDialog
+        open={opportunitiesEditOpen}
+        onClose={() => setOpportunitiesEditOpen(false)}
+        onAdd={() => {}}
+        editContact={opportunitiesContact}
+        disableEnforceFocus
+        onSave={(updated) => {
+          onUpdateContact(updated);
+          setOpportunitiesContact(updated);
+        }}
+      />
 
       <Dialog open={addPipelineOpen} onClose={() => setAddPipelineOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Add pipeline</DialogTitle>
@@ -1023,6 +1377,149 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
           <Button onClick={() => setRenamePipelineOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleRenamePipeline} disabled={!renamePipelineTitle.trim()}>
             Save
+          </Button>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(addContactToStage)}
+        onClose={() => {
+          setAddContactToStage(null);
+          resetAddToStageDialogFields();
+        }}
+        maxWidth="sm"
+        fullWidth
+        disableEnforceFocus
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+      >
+        <DialogTitle>
+          {addContactToStage ? `Add contact to ${addContactToStage.label}` : 'Add contact'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Pick an existing contact to assign to this stage, or create a new one. Contacts already in this stage are not
+            listed below.
+          </Typography>
+          {contacts.length > 0 && (
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              label="Search by name, company, email, or phone"
+              value={addContactSearch}
+              onChange={(e) => setAddContactSearch(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+          )}
+          {contacts.length > 0 &&
+            (filteredContactsForAdd.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {contactsAvailableForStage.length === 0
+                  ? 'Everyone on this pipeline is already in this stage. Drag a card to move between stages, or create a new contact below.'
+                  : 'No matches for your search.'}
+              </Typography>
+            ) : (
+              <Stack
+                spacing={0.5}
+                sx={{ maxHeight: 280, overflow: 'auto', mb: 1 }}
+              >
+                {filteredContactsForAdd.map((c) => {
+                  const onThisPipeline = contactBelongsToPipeline(c, currentPipelineId, pipelines);
+                  const currentStage = getContactStageForPipeline(c, currentPipelineId, defaultStageId, pipelines);
+                  const stageLabel = currentStages.find((s) => s.id === currentStage)?.label ?? currentStage;
+                  const sub = onThisPipeline
+                    ? [c.email, c.phone].filter(Boolean).join(' · ') || `Currently: ${stageLabel}`
+                    : [c.email, c.phone, c.company].filter(Boolean).join(' · ') || 'Not on this pipeline';
+                  return (
+                    <Button
+                      key={c.id}
+                      type="button"
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
+                        if (!addContactToStage) return;
+                        assignContactToStage(c, addContactToStage.stageId, addContactToStage.label);
+                      }}
+                      sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1, px: 1.5 }}
+                    >
+                      <Box sx={{ overflow: 'hidden' }}>
+                        <Typography variant="body2" fontWeight={600} noWrap display="block">
+                          {c.name || 'Unnamed'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                          {sub}
+                        </Typography>
+                      </Box>
+                    </Button>
+                  );
+                })}
+              </Stack>
+            ))}
+          {contacts.length === 0 && !onCreateContactForStage && (
+            <Typography variant="body2" color="text.secondary">
+              No contacts yet. Add contacts in the <strong>Contacts</strong> section first.
+            </Typography>
+          )}
+          {contacts.length === 0 && onCreateContactForStage && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              No contacts in this CRM yet. Use the form below to create one on this stage.
+            </Typography>
+          )}
+          {onCreateContactForStage && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" gutterBottom>
+                Create new contact
+              </Typography>
+              <Stack spacing={1.5}>
+                <TextField
+                  required
+                  fullWidth
+                  size="small"
+                  label="Name"
+                  value={quickCreateName}
+                  onChange={(e) => setQuickCreateName(e.target.value)}
+                  autoFocus={contacts.length === 0}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Email"
+                  type="email"
+                  value={quickCreateEmail}
+                  onChange={(e) => setQuickCreateEmail(e.target.value)}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Phone"
+                  value={quickCreatePhone}
+                  onChange={(e) => setQuickCreatePhone(e.target.value)}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Company"
+                  value={quickCreateCompany}
+                  onChange={(e) => setQuickCreateCompany(e.target.value)}
+                />
+                <Button variant="contained" color="primary" onClick={handleQuickCreateForStage}>
+                  Create and add to {addContactToStage?.label ?? 'stage'}
+                </Button>
+              </Stack>
+            </>
+          )}
+        </DialogContent>
+        <Box sx={{ px: 3, pb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setAddContactToStage(null);
+              resetAddToStageDialogFields();
+            }}
+          >
+            Close
           </Button>
         </Box>
       </Dialog>
@@ -1099,7 +1596,7 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
             </TableHead>
             <TableBody>
               {sortedSpreadsheetContacts.map((contact) => {
-                const stage = getContactStageForPipeline(contact, currentPipelineId, defaultStageId);
+                const stage = getContactStageForPipeline(contact, currentPipelineId, defaultStageId, pipelines);
                 const renderCell = (colId: SpreadsheetColumnId) => {
                   if (colId === 'name') {
                     return (
@@ -1352,7 +1849,8 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  bgcolor: 'grey.50',
+                  // Light grey header in light mode; dark surface in dark mode so default IconButton contrast works
+                  bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50'),
                 }}
               >
                 <Box>
@@ -1364,9 +1862,20 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                   </Typography>
                 </Box>
                 <Tooltip title="Add contact to stage">
-                  <IconButton size="small" aria-label={`Add to ${label}`}>
-                    <AddIcon fontSize="small" />
-                  </IconButton>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      aria-label={`Add to ${label}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddContactSearch('');
+                        setAddContactToStage({ stageId: id, label });
+                      }}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </Box>
               <Box
@@ -1431,11 +1940,30 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
                             <MoreVertIcon fontSize="small" />
                           </IconButton>
                         </Box>
-                        {cardFields.filter((k) => k !== 'name').map((key) => (
-                          <Typography key={key} variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
-                            {formatCardValue(contact, key)}
-                          </Typography>
-                        ))}
+                        {cardFields.filter((k) => k !== 'name').map((key) => {
+                          const label = OPPORTUNITIES_FIELD_LABELS[key] ?? key;
+                          const value = formatCardField(contact, key, {
+                            pipelineId: currentPipelineId,
+                            defaultStageId,
+                            pipelines,
+                          });
+                          const line = `${label}: ${value}`;
+                          return (
+                            <Typography
+                              key={key}
+                              variant="body2"
+                              color="text.secondary"
+                              noWrap
+                              title={line}
+                              sx={{ mt: 0.25 }}
+                            >
+                              <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                {label}:
+                              </Box>{' '}
+                              {value}
+                            </Typography>
+                          );
+                        })}
                       </CardContent>
                     </Card>
                   ))
@@ -1446,6 +1974,16 @@ function PipelineManagement({ contacts, onUpdateContact, onOpenContact, crmId: c
         })}
       </Box>
       )}
+      <Snackbar
+        open={Boolean(addContactSnackbar)}
+        autoHideDuration={5000}
+        onClose={() => setAddContactSnackbar(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setAddContactSnackbar(null)} severity="success" variant="filled" sx={{ width: '100%' }}>
+          {addContactSnackbar}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

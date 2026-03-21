@@ -243,7 +243,7 @@ const MarketResearch: React.FC = () => {
     } catch {
       /* ignore */
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- run once on mount
+  }, []); // run once on mount
 
   const effectiveApiKey = (apiKey || process.env.REACT_APP_MARKET_RESEARCH_API_KEY || '').trim();
   const effectiveApiUrl = (apiUrl || process.env.REACT_APP_MARKET_RESEARCH_API_URL || '').trim();

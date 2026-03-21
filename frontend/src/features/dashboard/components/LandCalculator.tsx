@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -50,6 +50,133 @@ const FLOOD_ZONES = {
 
 type FloodZoneValues = (typeof FLOOD_ZONES)[keyof typeof FLOOD_ZONES];
 
+const DEFAULT_COPY_TEMPLATE =
+  `Subject Property: ___________________
+County Appraisal Value: ___________________
+Asking Price: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank?___________________
+Acres / Sqft: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+✅ COMP #1
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Sold Date: ___________________
+Sold Price: $ ___________________
+DOM: ___________________
+Sq Ft Sold Price: $ ___________________
+Acres Sold Price: $ ___________________
+
+✅ COMP #2
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Sold Date: ___________________
+Sold Price: $ ___________________
+DOM: ___________________
+Sq Ft Sold Price: $ ___________________
+Acres Sold Price: $ ___________________
+
+✅ COMP #3
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Sold Date: ___________________
+Sold Price: $ ___________________
+DOM: ___________________
+Sq Ft Sold Price: $ ___________________
+Acres Sold Price: $ ___________________
+
+✅ COMP #4
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Sold Date: ___________________
+Sold Price: $ ___________________
+DOM: ___________________
+Sq Ft Sold Price: $ ___________________
+Acres Sold Price: $ ___________________
+
+✅ COMP #5
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Sold Date: ___________________
+Sold Price: $ ___________________
+DOM: ___________________
+Sq Ft Sold Price: $ ___________________
+Acres Sold Price: $ ___________________
+
+📌 ACTIVE LISTING #1
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Active Listing Date: ___________________
+Asking Price: $ ___________________
+DOM: ___________________
+Sq Ft Asking Price: $ ___________________
+Acres Asking Price: $ ___________________
+
+📌 ACTIVE LISTING #2
+Address: ___________________
+MLS #: ___________________
+Sq Ft: ___________________
+Acres: ___________________
+Tree Density: ___________________
+Flood Zone: ___________________
+Active Listing Date: ___________________
+Asking Price: $ ___________________
+DOM: ___________________
+Sq Ft Asking Price: $ ___________________
+Acres Asking Price: $ ___________________
+
+MARKET ANALYSIS
+SQ FT Avg Sold Price: $ ___________________
+Acres Avg Sold Price: $ ___________________
+Average Days on Market for Sold Comps: ___________________
+Subject Property Lot Size: ___________________
+REAL PROPERTY MARKET VALUE
+REAL PROPERTY MARKET VALUE: $___________________ (100%)
+• 90% = $___________________
+• 80% = $___________________
+• 70% = $___________________
+• 65% = $___________________
+• 60% = $___________________
+• 50% = $___________________
+• 40% = $___________________
+• 30% = $___________________
+• 20% = $___________________
+• 10% = $___________________
+
+Pricing Comparison
+Seller Asking Price: $ ___________________ ($_______/sqft, $__________/acre)
+County Appraisal Value: $ ___________________
+Asking Price – Real Market Value Difference: $ ___________________
+Asking Price to Market %: __________ %
+Anchor Points: ____________________
+Smart Notes: ___________________________
+Creative Offer: ___________________________`;
+
 interface CalculationResult {
   totalAcres: number;
   baseValue: number;
@@ -81,7 +208,7 @@ export const LandCalculator: React.FC = () => {
   const [anchorPoints, setAnchorPoints] = useState<string>('');
   const [smartNotes, setSmartNotes] = useState<string>('');
   const [creativeOffer, setCreativeOffer] = useState<string>('');
-  const [clipboardTemplate, setClipboardTemplate] = useState<string>('');
+  const [clipboardTemplate, setClipboardTemplate] = useState<string>(DEFAULT_COPY_TEMPLATE);
 
   const buildCopySummary = (): string => {
     const safe = (v: string | number | undefined | null): string => {
@@ -135,32 +262,73 @@ export const LandCalculator: React.FC = () => {
       return s;
     };
 
-    // Averages similar to tables (all 5 comps)
+    const parseNum = (s: string | undefined): number => {
+      if (!s || typeof s !== 'string') return NaN;
+      const n = parseFloat(String(s).replace(/,/g, '').trim());
+      return isNaN(n) ? NaN : n;
+    };
+    // Helper: get price per sq ft for a comp (use stored value or derive from sale price / sq ft)
+    const compPricePerSqFt = (c: typeof comp1Data): number => {
+      const ppsf = parseNum(c.pricePerSqFt);
+      if (!isNaN(ppsf)) return ppsf;
+      const sale = parseNum(c.salePrice), sqft = parseNum(c.squareFeet);
+      if (!isNaN(sale) && !isNaN(sqft) && sqft > 0) return sale / sqft;
+      return NaN;
+    };
+    const compPricePerAcre = (c: typeof comp1Data): number => {
+      const ppac = parseNum(c.pricePerAcre);
+      if (!isNaN(ppac)) return ppac;
+      const sale = parseNum(c.salePrice), ac = parseNum(c.acres);
+      if (!isNaN(sale) && !isNaN(ac) && ac > 0) return sale / ac;
+      return NaN;
+    };
+    const comps = [comp1Data, comp2Data, comp3Data, comp4Data, comp5Data];
     const avgPricePerSqFt = (() => {
-      const values = [comp1Data.pricePerSqFt, comp2Data.pricePerSqFt, comp3Data.pricePerSqFt, comp4Data.pricePerSqFt, comp5Data.pricePerSqFt]
-        .filter(p => p && !isNaN(parseFloat(p)) ) as string[];
+      const values = comps.map(compPricePerSqFt).filter(n => !isNaN(n));
       if (values.length === 0) return 0;
-      return values.reduce((s, p) => s + parseFloat(p), 0) / values.length;
+      return values.reduce((s, p) => s + p, 0) / values.length;
     })();
     const avgPricePerAcre = (() => {
-      const values = [comp1Data.pricePerAcre, comp2Data.pricePerAcre, comp3Data.pricePerAcre, comp4Data.pricePerAcre, comp5Data.pricePerAcre]
-        .filter(p => p && !isNaN(parseFloat(p)) ) as string[];
+      const values = comps.map(compPricePerAcre).filter(n => !isNaN(n));
       if (values.length === 0) return 0;
-      return values.reduce((s, p) => s + parseFloat(p), 0) / values.length;
+      return values.reduce((s, p) => s + p, 0) / values.length;
+    })();
+    const avgDomSoldComps = (() => {
+      const values = [comp1Data.dom, comp2Data.dom, comp3Data.dom, comp4Data.dom, comp5Data.dom]
+        .filter(d => d && !isNaN(parseFloat(d)) ) as string[];
+      if (values.length === 0) return '';
+      const avg = values.reduce((s, d) => s + parseFloat(d), 0) / values.length;
+      return Math.round(avg).toString();
     })();
 
-    // Estimated Market Value (same approach as Market Analysis Summary)
-    const estimatedMarketValue = (() => {
-      const subjectSqFt = squareFeet ? parseFloat(squareFeet) : 0;
-      if (!avgPricePerSqFt || !subjectSqFt) return 0;
-      return avgPricePerSqFt * subjectSqFt;
-    })();
+    // Subject lot size for per-sqft/per-acre at each %
+    const subjectSqFtNum = parseNum(squareFeet);
+    const subjectAcresNum = parseNum(acres);
+    // Both valuation methods (show both so user can compare)
+    const marketValueByAcre = (avgPricePerAcre && !isNaN(subjectAcresNum) && subjectAcresNum > 0)
+      ? avgPricePerAcre * subjectAcresNum : 0;
+    const marketValueBySqFt = (avgPricePerSqFt && !isNaN(subjectSqFtNum) && subjectSqFtNum > 0)
+      ? avgPricePerSqFt * subjectSqFtNum : 0;
+    // Primary for % bands: prefer acre for land; fall back to sq ft
+    const estimatedMarketValue = marketValueByAcre || marketValueBySqFt || 0;
 
     const pct = (p: number) => estimatedMarketValue ? estimatedMarketValue * (p / 100) : 0;
     const copySummaryPercentBands = [90, 80, 70, 65, 60, 50, 40, 30, 20, 10] as const;
     const percentLines = copySummaryPercentBands
-      .map((p) => `• ${p}% = $ ${fmtMoneyNum(pct(p))}`)
+      .map((p) => {
+        const amt = pct(p);
+        const priceStr = amt ? fmtMoneyNum(amt) : '___________________';
+        const perSqFt = (amt && !isNaN(subjectSqFtNum) && subjectSqFtNum > 0)
+          ? `$${fmtTwoNum(amt / subjectSqFtNum)}/sqft` : '';
+        const perAcre = (amt && !isNaN(subjectAcresNum) && subjectAcresNum > 0)
+          ? `$${fmtMoneyNum(amt / subjectAcresNum)}/acre` : '';
+        const extras = [perSqFt, perAcre].filter(Boolean).join(', ');
+        return `• ${p}% = $${priceStr}${extras ? ` (${extras})` : ''}`;
+      })
       .join('\n');
+
+    const wellSepticLabel = (v: string): string =>
+      v === 'true' ? 'Yes' : v === 'false' ? 'No' : v === 'confirm' ? 'Need to confirm' : '___________________';
 
     // Active listing derived values
     const activePricePerSqFt = (activeListingData.listPrice && activeListingData.squareFeet)
@@ -183,13 +351,17 @@ export const LandCalculator: React.FC = () => {
       ? ((parseFloat(baseValue) / estimatedMarketValue) * 100)
       : undefined;
 
-    const today = (() => {
-      const d = new Date();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const y = d.getFullYear();
-      return `${m}/${day}/${y}`;
-    })();
+    const numAskingPrice = parseNum(baseValue);
+    const sellerAskingExtras: string[] = [];
+    if (!isNaN(numAskingPrice) && numAskingPrice > 0) {
+      if (!isNaN(subjectSqFtNum) && subjectSqFtNum > 0) {
+        sellerAskingExtras.push(`$${fmtTwoNum(numAskingPrice / subjectSqFtNum)}/sqft`);
+      }
+      if (!isNaN(subjectAcresNum) && subjectAcresNum > 0) {
+        sellerAskingExtras.push(`$${fmtMoneyNum(numAskingPrice / subjectAcresNum)}/acre`);
+      }
+    }
+    const sellerAskingSuffix = sellerAskingExtras.length > 0 ? ` (${sellerAskingExtras.join(', ')})` : '';
 
     const compBlock = (comp: typeof comp1Data, num: number) =>
       `✅ COMP #${num}\n` +
@@ -202,8 +374,8 @@ export const LandCalculator: React.FC = () => {
       `Sold Date: ${placeholder(formatDateMMDDYYYY(comp.closeDate))}\n` +
       `Sold Price: $ ${placeholder(comp.salePrice ? fmtMoney(comp.salePrice) : '')}\n` +
       `DOM: ${placeholder(comp.dom)}\n` +
-      `Sq Ft Sold Price: $ ${placeholder(comp.pricePerSqFt ? fmtTwo(comp.pricePerSqFt) : '')}\n` +
-      `Acres Sold Price: $ ${placeholder(comp.pricePerAcre ? fmtMoney(comp.pricePerAcre) : '')}\n\n`;
+      `Sq Ft Sold Price: $ ${!isNaN(compPricePerSqFt(comp)) ? fmtTwoNum(compPricePerSqFt(comp)) : '___________________'}\n` +
+      `Acres Sold Price: $ ${!isNaN(compPricePerAcre(comp)) ? fmtMoneyNum(compPricePerAcre(comp)) : '___________________'}\n\n`;
 
     const subjectLotSize = [
       squareFeet ? `${parseInt(squareFeet).toLocaleString()} sq ft` : '',
@@ -224,23 +396,12 @@ export const LandCalculator: React.FC = () => {
       `Sq Ft Asking Price: $ ${placeholder(pricePerSqFt != null ? fmtTwoNum(pricePerSqFt) : '')}\n` +
       `Acres Asking Price: $ ${placeholder(pricePerAcre != null ? fmtMoneyNum(pricePerAcre) : '')}\n\n`;
 
-    const activeListingPriceLine = (activeListingData.listPrice && activeListingData.daysOnMarket)
-      ? `${fmtMoney(activeListingData.listPrice)} (${formatDateMMDDYYYY(activeListingData.listDate) || '___'} / ${activeListingData.daysOnMarket} DOM)`
-      : '___________________';
-
     const fullSummary =
-      `COMPARABLES\n` +
-      `COMPS BY: ___________________\n` +
-      `Date: ${today}\n` +
-      `Active Listing Price (DATE / DOM): $ ${activeListingPriceLine}\n` +
-      `Listing Agent: ___________________\n` +
-      `Listing Agent Phone: ___________________\n` +
-      `Expired Listing Price (DATE / DOM): $ ___________________\n` +
-      `Previous Purchase Price: $ ___________________\n` +
-      `Builder Sold Comps: ☐ Yes ☐ No\n` +
-      `Active Listings Over 90 Days:\n\n` +
       `Subject Property: ${placeholder(address)}\n` +
+      `County Appraisal Value: ${placeholder(appraisalValue ? fmtMoney(appraisalValue) : '')}\n` +
       `Asking Price: ${placeholder(baseValue ? fmtMoney(baseValue) : '')}\n` +
+      `Needs Water Well? ${wellSepticLabel(needsWell)}\n` +
+      `Needs Septic Tank? ${wellSepticLabel(needsSeptic)}\n` +
       `Acres / Sqft: ${subjectLotSize || '___________________'}\n` +
       `Tree Density: ${placeholder(trees)}\n` +
       `Flood Zone: ${placeholder(floodZone)}\n\n` +
@@ -249,18 +410,18 @@ export const LandCalculator: React.FC = () => {
       `${compBlock(comp3Data, 3)}` +
       `${compBlock(comp4Data, 4)}` +
       `${compBlock(comp5Data, 5)}` +
-      `\n` +
       activeListingBlock(activeListingData, 1, activePricePerSqFt, activePricePerAcre) +
       activeListingBlock(activeListing2Data, 2, active2PricePerSqFt, active2PricePerAcre) +
       `MARKET ANALYSIS\n` +
       `SQ FT Avg Sold Price: $ ${avgPricePerSqFt ? fmtTwoNum(avgPricePerSqFt) : '___________________'}\n` +
       `Acres Avg Sold Price: $ ${avgPricePerAcre ? fmtMoneyNum(avgPricePerAcre) : '___________________'}\n` +
+      `Average Days on Market for Sold Comps: ${avgDomSoldComps || '___________________'}\n` +
       `Subject Property Lot Size: ${subjectLotSize || '___________________'}\n\n` +
       `REAL PROPERTY MARKET VALUE\n` +
       `REAL PROPERTY MARKET VALUE: $${estimatedMarketValue ? fmtMoneyNum(estimatedMarketValue) : '___________________'} (100%)\n` +
       `${percentLines}\n\n` +
       `Pricing Comparison\n` +
-      `Seller Asking Price: $ ${placeholder(baseValue ? fmtMoney(baseValue) : '')}\n` +
+      `Seller Asking Price: $ ${placeholder(baseValue ? fmtMoney(baseValue) : '')}${sellerAskingSuffix}\n` +
       `County Appraisal Value: $ ${placeholder(appraisalValue ? fmtMoney(appraisalValue) : '')}\n` +
       `Asking Price – Real Market Value Difference: $ ${askingMinusMarket !== undefined ? fmtMoneyNum(askingMinusMarket) : '___________________'}\n` +
       `Asking Price to Market %: ${askingToMarketPct !== undefined ? fmtTwoNum(askingToMarketPct) : '__________'} %\n` +
@@ -269,12 +430,6 @@ export const LandCalculator: React.FC = () => {
       `Creative Offer: ${placeholder(creativeOffer)}\n`;
     return fullSummary;
   };
-
-  // Seed clipboard template once on mount so the box shows current template (user can edit and regenerate anytime)
-  useEffect(() => {
-    setClipboardTemplate(buildCopySummary());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Comp 1 states
   const [comp1PasteInput, setComp1PasteInput] = useState<string>('');
@@ -414,6 +569,76 @@ export const LandCalculator: React.FC = () => {
     pricePerAcre: '',
     closeDate: ''
   });
+
+  // Real Property Market Value bands (visible in UI, matches copy template logic)
+  const marketValueBands = useMemo(() => {
+    const parseNum = (s: string | undefined): number => {
+      if (!s || typeof s !== 'string') return NaN;
+      const n = parseFloat(String(s).replace(/,/g, '').trim());
+      return isNaN(n) ? NaN : n;
+    };
+    const compPricePerSqFt = (c: typeof comp1Data): number => {
+      const ppsf = parseNum(c.pricePerSqFt);
+      if (!isNaN(ppsf)) return ppsf;
+      const sale = parseNum(c.salePrice), sqft = parseNum(c.squareFeet);
+      if (!isNaN(sale) && !isNaN(sqft) && sqft > 0) return sale / sqft;
+      return NaN;
+    };
+    const compPricePerAcre = (c: typeof comp1Data): number => {
+      const ppac = parseNum(c.pricePerAcre);
+      if (!isNaN(ppac)) return ppac;
+      const sale = parseNum(c.salePrice), ac = parseNum(c.acres);
+      if (!isNaN(sale) && !isNaN(ac) && ac > 0) return sale / ac;
+      return NaN;
+    };
+    const comps = [comp1Data, comp2Data, comp3Data, comp4Data, comp5Data];
+    const avgPricePerSqFt = (() => {
+      const values = comps.map(compPricePerSqFt).filter(n => !isNaN(n));
+      if (values.length === 0) return 0;
+      return values.reduce((s, p) => s + p, 0) / values.length;
+    })();
+    const avgPricePerAcre = (() => {
+      const values = comps.map(compPricePerAcre).filter(n => !isNaN(n));
+      if (values.length === 0) return 0;
+      return values.reduce((s, p) => s + p, 0) / values.length;
+    })();
+    const subjectSqFtNum = parseNum(squareFeet);
+    const subjectAcresNum = parseNum(acres);
+    const marketValueByAcre = (avgPricePerAcre && !isNaN(subjectAcresNum) && subjectAcresNum > 0)
+      ? avgPricePerAcre * subjectAcresNum : 0;
+    const marketValueBySqFt = (avgPricePerSqFt && !isNaN(subjectSqFtNum) && subjectSqFtNum > 0)
+      ? avgPricePerSqFt * subjectSqFtNum : 0;
+    const estimatedMarketValue = marketValueByAcre || marketValueBySqFt || 0;
+    const pct = (p: number) => estimatedMarketValue ? estimatedMarketValue * (p / 100) : 0;
+    const bands = [90, 80, 70, 65, 60, 50, 40, 30, 20, 10] as const;
+    const numAskingPrice = parseNum(baseValue);
+    const sellerAskingExtras: string[] = [];
+    if (!isNaN(numAskingPrice) && numAskingPrice > 0) {
+      if (!isNaN(subjectSqFtNum) && subjectSqFtNum > 0) {
+        sellerAskingExtras.push(`$${(numAskingPrice / subjectSqFtNum).toFixed(2)}/sqft`);
+      }
+      if (!isNaN(subjectAcresNum) && subjectAcresNum > 0) {
+        sellerAskingExtras.push(
+          `$${(numAskingPrice / subjectAcresNum).toLocaleString(undefined, { maximumFractionDigits: 0 })}/acre`
+        );
+      }
+    }
+    return {
+      estimatedMarketValue,
+      percentBands: bands.map((p) => {
+        const amt = pct(p);
+        const perSqFt = (amt && !isNaN(subjectSqFtNum) && subjectSqFtNum > 0)
+          ? amt / subjectSqFtNum : undefined;
+        const perAcre = (amt && !isNaN(subjectAcresNum) && subjectAcresNum > 0)
+          ? amt / subjectAcresNum : undefined;
+        return { p, amt, perSqFt, perAcre };
+      }),
+      sellerAsking:
+        !isNaN(numAskingPrice) && numAskingPrice > 0
+          ? { amount: numAskingPrice, extras: sellerAskingExtras }
+          : null,
+    };
+  }, [comp1Data, comp2Data, comp3Data, comp4Data, comp5Data, squareFeet, acres, baseValue]);
 
   // Active Listing 2 states
   const [activeListing2PasteInput, setActiveListing2PasteInput] = useState<string>('');
@@ -879,6 +1104,14 @@ export const LandCalculator: React.FC = () => {
         }
       }
 
+      // Compute price per sq ft / acre from sale price and size if missing
+      if (newData.salePrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.salePrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      if (newData.salePrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.salePrice) / parseFloat(newData.acres)).toFixed(2);
+      }
+
       // Update state with parsed values
       setComp1Data(newData);
 
@@ -1035,6 +1268,14 @@ export const LandCalculator: React.FC = () => {
         }
       }
 
+      // Compute price per sq ft / acre from sale price and size if missing
+      if (newData.salePrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.salePrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      if (newData.salePrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.salePrice) / parseFloat(newData.acres)).toFixed(2);
+      }
+
       // Update state with parsed values
       setComp2Data(newData);
 
@@ -1186,6 +1427,14 @@ export const LandCalculator: React.FC = () => {
         }
       }
 
+      // Compute price per sq ft / acre from sale price and size if missing
+      if (newData.salePrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.salePrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      if (newData.salePrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.salePrice) / parseFloat(newData.acres)).toFixed(2);
+      }
+
       // Update state with parsed values
       setComp3Data(newData);
 
@@ -1256,6 +1505,13 @@ export const LandCalculator: React.FC = () => {
           else newData.floodZone = FLOOD_ZONES.UNDETERMINED;
         }
       }
+      // Compute price per sq ft / acre from sale price and size if missing
+      if (newData.salePrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.salePrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      if (newData.salePrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.salePrice) / parseFloat(newData.acres)).toFixed(2);
+      }
       setComp4Data(newData);
       setComp4PasteInput('');
       setShowComp4QuickInput(false);
@@ -1322,6 +1578,13 @@ export const LandCalculator: React.FC = () => {
           else if (lowerLine.includes('clear')) newData.floodZone = FLOOD_ZONES.CLEAR;
           else newData.floodZone = FLOOD_ZONES.UNDETERMINED;
         }
+      }
+      // Compute price per sq ft / acre from sale price and size if missing
+      if (newData.salePrice && newData.squareFeet && !newData.pricePerSqFt) {
+        newData.pricePerSqFt = (parseFloat(newData.salePrice) / parseFloat(newData.squareFeet)).toFixed(2);
+      }
+      if (newData.salePrice && newData.acres && !newData.pricePerAcre) {
+        newData.pricePerAcre = (parseFloat(newData.salePrice) / parseFloat(newData.acres)).toFixed(2);
       }
       setComp5Data(newData);
       setComp5PasteInput('');
@@ -2019,6 +2282,7 @@ export const LandCalculator: React.FC = () => {
                 >
                   <FormControlLabel value="true" control={<Radio />} label="Yes" />
                   <FormControlLabel value="false" control={<Radio />} label="No" />
+                  <FormControlLabel value="confirm" control={<Radio />} label="Need to confirm" />
                 </RadioGroup>
               </FormControl>
             </Box>
@@ -2033,6 +2297,7 @@ export const LandCalculator: React.FC = () => {
                 >
                   <FormControlLabel value="true" control={<Radio />} label="Yes" />
                   <FormControlLabel value="false" control={<Radio />} label="No" />
+                  <FormControlLabel value="confirm" control={<Radio />} label="Need to confirm" />
                 </RadioGroup>
               </FormControl>
             </Box>
@@ -3444,6 +3709,86 @@ export const LandCalculator: React.FC = () => {
                 </TableFooter>
               </Table>
             </Box>
+
+          {/* Real Property Market Value - percentages with per sqft & per acre */}
+          <Card variant="outlined" sx={{ mt: 2, mb: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                  Real Property Market Value
+                </Typography>
+                {marketValueBands.estimatedMarketValue > 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Est. market value: ${marketValueBands.estimatedMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </Typography>
+                )}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  {marketValueBands.percentBands.map(({ p, amt, perSqFt, perAcre }) =>
+                    amt > 0 ? (
+                    <Box
+                      key={p}
+                      sx={{
+                        px: 1.5,
+                        py: 0.75,
+                        borderRadius: 1,
+                        backgroundColor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'grey.100'),
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      <strong>{p}%</strong>
+                      {amt > 0 && (
+                        <>
+                          {' = $' + amt.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          {(perSqFt != null || perAcre != null) && (
+                            <span style={{ color: 'var(--mui-palette-text-secondary)' }}>
+                              {' '}
+                              ({[
+                                perSqFt != null && `$${perSqFt.toFixed(2)}/sqft`,
+                                perAcre != null && `$${perAcre.toLocaleString(undefined, { maximumFractionDigits: 0 })}/acre`,
+                              ].filter(Boolean).join(', ')})
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Box>
+                    ) : null
+                  )}
+                </Box>
+                {marketValueBands.estimatedMarketValue === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Enter subject Acres or Square Feet and at least one comp with sale price & lot size to see values.
+                  </Typography>
+                )}
+
+                {marketValueBands.sellerAsking && (
+                  <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                      Pricing comparison
+                    </Typography>
+                    <Box
+                      sx={{
+                        px: 1.5,
+                        py: 1,
+                        borderRadius: 1,
+                        backgroundColor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'grey.100'),
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      <strong>Seller asking price:</strong>{' '}
+                      $
+                      {marketValueBands.sellerAsking.amount.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}
+                      {marketValueBands.sellerAsking.extras.length > 0 && (
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                          {' '}
+                          ({marketValueBands.sellerAsking.extras.join(', ')})
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
 
           {/* Copy-ready Summary */}
           <Card variant="outlined">

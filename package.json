@@ -6,8 +6,14 @@
   "scripts": {
     "build": "cd frontend && npm run build",
     "start": "cd frontend && npm start",
+    "start:poll": "cd frontend && npm run start:poll",
+    "start:serve": "npm run build && npm run serve:build",
+    "install:frontend": "cd frontend && rm -rf node_modules package-lock.json && npm install --legacy-peer-deps",
     "serve": "node scripts/serve-local.js",
-    "refresh": "npm run build && node -e \"require('fs').cpSync('frontend/build','crm-system',{recursive:true})\"",
+    "serve:build": "node scripts/serve-build.js",
+    "sync:crm": "node scripts/sync-crm-folder.js",
+    "build:sync": "npm run build && npm run sync:crm",
+    "refresh": "npm run build:sync",
     "deploy": "node scripts/prepare-gh-pages.js && npx gh-pages -d gh-pages-publish -r https://github.com/Landdreamz/crm-system.git",
     "deploy:build": "npm run build && npm run deploy"
   },

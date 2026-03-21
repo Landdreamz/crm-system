@@ -9,7 +9,7 @@ let heatReady = false;
 function ensureHeat() {
   if (heatReady) return Promise.resolve();
   (window as unknown as { L: typeof L }).L = L;
-  // eslint-disable-next-line import/first -- load after L is on window for leaflet.heat
+  // Load after L is on window for leaflet.heat
   return import('leaflet.heat').then(() => { heatReady = true; });
 }
 

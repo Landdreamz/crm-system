@@ -25,6 +25,8 @@ interface AddContactDialogProps {
   /** When set, dialog is in edit mode and calls onSave on submit */
   editContact?: Contact | null;
   onSave?: (contact: Contact) => void;
+  /** Use when this dialog opens on top of another dialog (focus trap). */
+  disableEnforceFocus?: boolean;
 }
 
 const getInitialFormState = (editContact?: Contact | null): NewContact => {
@@ -44,7 +46,14 @@ const getInitialFormState = (editContact?: Contact | null): NewContact => {
   };
 };
 
-const AddContactDialog: React.FC<AddContactDialogProps> = ({ open, onClose, onAdd, editContact, onSave }) => {
+const AddContactDialog: React.FC<AddContactDialogProps> = ({
+  open,
+  onClose,
+  onAdd,
+  editContact,
+  onSave,
+  disableEnforceFocus,
+}) => {
   const isEdit = Boolean(editContact);
   const [formData, setFormData] = React.useState<NewContact>(() => getInitialFormState(editContact));
 
@@ -85,7 +94,13 @@ const AddContactDialog: React.FC<AddContactDialogProps> = ({ open, onClose, onAd
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      disableEnforceFocus={Boolean(disableEnforceFocus)}
+    >
       <DialogTitle>{isEdit ? 'Edit Contact' : 'Add New Contact'}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent sx={{ maxHeight: '70vh', overflowY: 'auto' }}>

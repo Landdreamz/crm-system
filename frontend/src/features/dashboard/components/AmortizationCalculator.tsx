@@ -12,6 +12,7 @@ import {
   TableHead,
   TableRow,
   Grid,
+  InputAdornment,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
@@ -50,13 +51,69 @@ interface PaymentRow {
 
 const COLORS = ['#0088FE', '#00C49F'];
 
+/** Compact inputs; hide number spinners for a calmer field. */
+const amortizationTextFieldSx = {
+  width: '100%',
+  '& .MuiInputLabel-root': {
+    fontSize: '0.8125rem',
+    lineHeight: 1.25,
+  },
+  '& .MuiOutlinedInput-root': {
+    fontSize: '0.875rem',
+  },
+  '& .MuiOutlinedInput-input': {
+    fontSize: '0.875rem',
+    lineHeight: 1.5,
+    paddingTop: '10px',
+    paddingBottom: '10px',
+  },
+  '& input[type=number]': {
+    MozAppearance: 'textfield',
+  },
+  '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+    WebkitAppearance: 'none',
+    margin: 0,
+  },
+} as const;
+
+const FIELD_HINT_MIN_HEIGHT = 36;
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      component="div"
+      sx={{
+        minHeight: FIELD_HINT_MIN_HEIGHT,
+        mt: 0.5,
+        lineHeight: 1.35,
+        fontSize: '0.7rem',
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
 const AmortizationCalculator: React.FC = () => {
+  const [purchasePrice, setPurchasePrice] = useState<string>('');
+  const [downPayment, setDownPayment] = useState<string>('');
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [interestRate, setInterestRate] = useState<string>('');
   const [loanTerm, setLoanTerm] = useState<string>('');
   const [schedule, setSchedule] = useState<PaymentRow[]>([]);
   const [totalInterest, setTotalInterest] = useState<number>(0);
   const [monthlyPayment, setMonthlyPayment] = useState<number>(0);
+
+  const syncLoanFromPurchaseAndDown = (purchaseStr: string, downStr: string) => {
+    const p = parseFloat(purchaseStr);
+    if (!Number.isFinite(p) || purchaseStr.trim() === '') return;
+    const d = downStr.trim() === '' ? 0 : parseFloat(downStr);
+    if (!Number.isFinite(d)) return;
+    const financed = Math.max(0, p - d);
+    setLoanAmount(String(financed));
+  };
 
   const calculateAmortization = () => {
     const principal = parseFloat(loanAmount);
@@ -111,36 +168,125 @@ const AmortizationCalculator: React.FC = () => {
   return (
     <Box>
       <StyledPaper>
-        <Typography variant="h6" gutterBottom>
-          Loan Amortization Calculator
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+          Loan amortization calculator
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <TextField
-            label="Loan Amount ($)"
-            type="number"
-            value={loanAmount}
-            onChange={(e) => setLoanAmount(e.target.value)}
-            sx={{ flex: 1 }}
-          />
-          <TextField
-            label="Annual Interest Rate (%)"
-            type="number"
-            value={interestRate}
-            onChange={(e) => setInterestRate(e.target.value)}
-            sx={{ flex: 1 }}
-          />
-          <TextField
-            label="Loan Term (Years)"
-            type="number"
-            value={loanTerm}
-            onChange={(e) => setLoanTerm(e.target.value)}
-            sx={{ flex: 1 }}
-          />
-          <Button
-            variant="contained"
-            onClick={calculateAmortization}
-            sx={{ minWidth: '200px' }}
-          >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
+          Purchase price and down payment update the loan amount automatically. You can still edit the loan amount directly.
+        </Typography>
+
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+          Purchase &amp; financing
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Purchase price"
+              type="number"
+              value={purchasePrice}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPurchasePrice(v);
+                syncLoanFromPurchaseAndDown(v, downPayment);
+              }}
+              inputProps={{ min: 0 }}
+              sx={amortizationTextFieldSx}
+            />
+            <FieldHint>Loan = price minus down payment</FieldHint>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Down payment"
+              type="number"
+              value={downPayment}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDownPayment(v);
+                syncLoanFromPurchaseAndDown(purchasePrice, v);
+              }}
+              inputProps={{ min: 0 }}
+              sx={amortizationTextFieldSx}
+            />
+            <FieldHint>Leave blank to use $0</FieldHint>
+          </Grid>
+          <Grid item xs={12} sm={12} md={4}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Loan amount"
+              type="number"
+              value={loanAmount}
+              onChange={(e) => setLoanAmount(e.target.value)}
+              sx={amortizationTextFieldSx}
+            />
+            <FieldHint>Amount financed (editable)</FieldHint>
+          </Grid>
+        </Grid>
+
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+          Loan terms
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Annual interest rate"
+              type="number"
+              value={interestRate}
+              onChange={(e) => setInterestRate(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography variant="body2" color="text.secondary" sx={{ userSelect: 'none' }}>
+                      %
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+              sx={amortizationTextFieldSx}
+            />
+            <FieldHint>APR as a percent (e.g. 6.5)</FieldHint>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Loan term"
+              type="number"
+              value={loanTerm}
+              onChange={(e) => setLoanTerm(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography variant="body2" color="text.secondary" sx={{ userSelect: 'none' }}>
+                      yr
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+              sx={amortizationTextFieldSx}
+            />
+            <FieldHint>Length of the loan in years</FieldHint>
+          </Grid>
+        </Grid>
+
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 1.5,
+            pt: 1,
+            borderTop: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Button variant="contained" onClick={calculateAmortization} size="large" sx={{ minWidth: 200, px: 3 }}>
             Calculate
           </Button>
         </Box>
@@ -149,6 +295,30 @@ const AmortizationCalculator: React.FC = () => {
           <>
             <SummaryBox>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
+                {purchasePrice.trim() !== '' && Number.isFinite(parseFloat(purchasePrice)) && (
+                  <Box sx={{ flex: 1, minWidth: 200 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Total purchase price
+                    </Typography>
+                    <Typography variant="h6">
+                      ${parseFloat(purchasePrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>
+                  </Box>
+                )}
+                {(downPayment.trim() !== '' ? Number.isFinite(parseFloat(downPayment)) : purchasePrice.trim() !== '') && (
+                  <Box sx={{ flex: 1, minWidth: 200 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Down payment
+                    </Typography>
+                    <Typography variant="h6">
+                      $
+                      {(downPayment.trim() === '' ? 0 : parseFloat(downPayment)).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </Typography>
+                  </Box>
+                )}
                 <Box sx={{ flex: 1, minWidth: 200 }}>
                   <Typography variant="subtitle2" color="textSecondary">
                     Monthly Payment
@@ -167,7 +337,7 @@ const AmortizationCalculator: React.FC = () => {
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 200 }}>
                   <Typography variant="subtitle2" color="textSecondary">
-                    Total Cost
+                    Total loan cost (principal + interest)
                   </Typography>
                   <Typography variant="h6">
                     ${(parseFloat(loanAmount) + totalInterest).toFixed(2)}
@@ -220,8 +390,8 @@ const AmortizationCalculator: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) =>
-                        `${name}: ${(percent * 100).toFixed(0)}%`
+                      label={({ name, percent }: { name?: string; percent?: number }) =>
+                        `${name ?? ''}: ${((percent ?? 0) * 100).toFixed(0)}%`
                       }
                       outerRadius={80}
                       fill="#8884d8"

@@ -355,7 +355,7 @@ const LandOfferCalculator: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
-                  <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                  <Tooltip formatter={(value: number | undefined) => `$${(value ?? 0).toFixed(2)}`} />
                   <Legend />
                   <Bar dataKey="amount" fill="#8884d8" name="Amount" />
                 </BarChart>

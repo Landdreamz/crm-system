@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { styled, useTheme } from '@mui/material/styles';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { styled } from '@mui/material/styles';
 import {
   Box,
   Drawer,
@@ -61,7 +61,7 @@ import PipelineManagement from './components/PipelineManagement';
 import Settings from './components/Settings';
 import TasksView from './components/TasksView';
 import ParcelApiMap, { type MapFlyToResult } from './components/ParcelApiMap';
-import type { Contact } from './components/types';
+import type { Contact, NewContact } from './components/types';
 
 const PARCEL_API_BASE = typeof process !== 'undefined' ? (process.env.REACT_APP_PARCEL_API_URL || 'http://localhost:8001') : 'http://localhost:8001';
 
@@ -396,6 +396,9 @@ type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts
 
 const CRM_ACTIVE_ID_KEY = 'crmActiveId';
 
+/** Shown in the sidebar; if this string is missing or old, the browser is not loading the latest JS. */
+const UI_BUILD_STAMP = '2025-03-21d';
+
 export type CrmId = 'acq' | 'dispo';
 
 const CRMS: { id: CrmId; name: string }[] = [
@@ -421,7 +424,7 @@ function saveActiveCrmId(id: CrmId) {
   }
 }
 
-const drawerWidth = 240;
+const drawerWidth = 268;
 
 const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{
   open?: boolean;
@@ -469,12 +472,13 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
-  const theme = useTheme();
   const [open, setOpen] = React.useState(true);
   const [selectedSection, setSelectedSection] = React.useState<Section>('Parcel API');
   const [currentCrmId, setCurrentCrmId] = useState<CrmId>(loadActiveCrmId);
   const [contacts, setContacts] = useState<Contact[]>(() => loadContacts(loadActiveCrmId()));
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
+  const contactsRef = useRef(contacts);
+  contactsRef.current = contacts;
 
   useEffect(() => {
     saveContacts(contacts, currentCrmId);
@@ -488,23 +492,43 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
     saveActiveCrmId(crmId);
   };
 
-  const handleUpdateContact = (updated: Contact) => {
+  const handleUpdateContact = useCallback((updated: Contact) => {
     setContacts((prev) => {
-      const next = prev.map((c) => {
-        if (c.id !== updated.id) return c;
-        // Use the tasks array from TasksView as-is (no remap) so dueTime is never dropped
-        const tasks = updated.tasks ?? c.tasks ?? [];
-        return {
-          ...c,
-          ...updated,
-          tasks,
-        };
-      });
-      // Persist immediately with the exact state we're setting
+      const idx = prev.findIndex((c) => String(c.id) === String(updated.id));
+      if (idx === -1) return prev;
+      const c = prev[idx];
+      const tasks = updated.tasks ?? c.tasks ?? [];
+      const next = [...prev];
+      next[idx] = { ...c, ...updated, tasks };
       saveContacts(next, currentCrmId);
+      contactsRef.current = next;
       return next;
     });
-  };
+  }, [currentCrmId]);
+
+  const handleCreateContactForStage = useCallback(
+    (newContact: NewContact, pipelineId: string, stageId: string) => {
+      setContacts((prev) => {
+        const numericIds = prev.map((x) => {
+          const n = Number(x.id);
+          return Number.isFinite(n) ? n : 0;
+        });
+        const nextId = (numericIds.length ? Math.max(0, ...numericIds) : 0) + 1;
+        const contact: Contact = {
+          ...newContact,
+          id: nextId,
+          pipeline: pipelineId,
+          pipelineStages: { [pipelineId]: stageId },
+          pipelineStage: stageId,
+        };
+        const next = [...prev, contact];
+        saveContacts(next, currentCrmId);
+        contactsRef.current = next;
+        return next;
+      });
+    },
+    [currentCrmId]
+  );
 
   const handleOpenContact = (contactId: number) => {
     setSelectedContactId(contactId);
@@ -561,6 +585,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
           <PipelineManagement
             contacts={contacts}
             onUpdateContact={handleUpdateContact}
+            onCreateContactForStage={handleCreateContactForStage}
             onOpenContact={handleOpenContact}
             crmId={currentCrmId}
             crms={CRMS}
@@ -602,25 +627,20 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
     setOpen(!open);
   };
 
-  const greenGradient = 'linear-gradient(to top, #0ba360 0%, #3cba92 100%)';
-
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', background: greenGradient }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar
         position="fixed"
         sx={{
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          background: greenGradient,
-          boxShadow: 'none',
+          zIndex: (t) => t.zIndex.drawer + 1,
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 } }}>
           <IconButton
-            color="inherit"
             aria-label="toggle drawer"
             onClick={handleDrawerToggle}
             edge="start"
-            sx={{ mr: 2 }}
+            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
           >
             <MenuIcon />
           </IconButton>
@@ -631,12 +651,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
             disableUnderline
             IconComponent={ArrowDropDownIcon}
             sx={{
-              color: 'inherit',
-              fontSize: '1.25rem',
-              fontWeight: 600,
-              minWidth: 160,
-              '& .MuiSelect-select': { py: 0.5 },
-              '& .MuiSvgIcon-root': { color: 'inherit' },
+              color: 'text.primary',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              minWidth: 140,
+              '& .MuiSelect-select': { py: 0.5, pr: '28px !important' },
+              '& .MuiSvgIcon-root': { color: 'text.secondary' },
             }}
           >
             {CRMS.map((crm) => (
@@ -645,9 +665,28 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
               </MenuItem>
             ))}
           </Select>
-          <Box sx={{ flexGrow: 1 }} />
+          <Typography
+            variant="h6"
+            component="h1"
+            noWrap
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              ml: { xs: 0.5, sm: 1 },
+              fontWeight: 600,
+              fontSize: { xs: '0.875rem', sm: '1.05rem' },
+              color: 'text.primary',
+            }}
+          >
+            {selectedSection}
+          </Typography>
           {onLogout && (
-            <IconButton color="inherit" onClick={onLogout} aria-label="Log out" size="medium">
+            <IconButton
+              onClick={onLogout}
+              aria-label="Log out"
+              size="medium"
+              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+            >
               <LogoutIcon />
             </IconButton>
           )}
@@ -663,27 +702,54 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            background: theme.palette.background.paper,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
           },
         }}
       >
         <Toolbar />
-        <Box sx={{ overflow: 'auto' }}>
-          <List>
+        <Box sx={{ px: 2.5, py: 2.5, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              lineHeight: 1.15,
+              fontSize: '1.15rem',
+            }}
+          >
+            Deal Vision
+            <Typography component="span" sx={{ fontWeight: 500, color: 'primary.main', ml: 0.25 }}>
+              CRM
+            </Typography>
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, lineHeight: 1.4 }}>
+            Workspace
+          </Typography>
+        </Box>
+        <Box sx={{ overflow: 'auto', flex: 1, minHeight: 0, py: 1 }}>
+          <List disablePadding sx={{ px: 0.5 }}>
             {MENU_ITEMS.map((item) => (
-              <ListItem key={item.text} disablePadding>
+              <ListItem key={item.text} disablePadding sx={{ display: 'block' }}>
                 <ListItemButton
                   selected={selectedSection === item.text}
                   onClick={() => setSelectedSection(item.text as Section)}
                 >
                   <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                      variant: 'body2',
+                      fontWeight: selectedSection === item.text ? 600 : 500,
+                    }}
+                  />
                 </ListItemButton>
               </ListItem>
             ))}
           </List>
-          <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
-            App: crm-system
+          <Typography variant="caption" color="text.secondary" sx={{ px: 2.5, py: 2, display: 'block', opacity: 0.75 }}>
+            crm-system · {UI_BUILD_STAMP}
           </Typography>
         </Box>
       </Drawer>

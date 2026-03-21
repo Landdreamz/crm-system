@@ -491,7 +491,7 @@ function ParcelAddressLayer({ enabled }: { enabled: boolean }) {
           }
           const layer = L.geoJSON(geojson, {
             style: () => parcelStyle,
-            pointToLayer: (_, latlng) => {
+            pointToLayer: (_: GeoJSON.Feature, latlng: L.LatLng) => {
               const marker = L.circleMarker(latlng, {
                 radius: 8,
                 ...parcelStyle,
@@ -509,7 +509,7 @@ function ParcelAddressLayer({ enabled }: { enabled: boolean }) {
               });
               return marker;
             },
-            onEachFeature: (feature, leafletLayer) => {
+            onEachFeature: (feature: GeoJSON.Feature, leafletLayer: L.Layer) => {
               const props = feature.properties || {};
               const content = formatParcelPopupContent(props as Record<string, string>);
               leafletLayer.bindPopup(content, { maxWidth: 320 });
@@ -596,7 +596,7 @@ function ArcGISParcelLayer({
           }
           const layer = L.geoJSON(geojson, {
             style: () => parcelStyle,
-            onEachFeature: (feature, leafletLayer) => {
+            onEachFeature: (feature: GeoJSON.Feature, leafletLayer: L.Layer) => {
               const props = (feature.properties || {}) as Record<string, unknown>;
               const content = formatArcGISParcelPopup(props);
               leafletLayer.bindPopup(content, { maxWidth: 320 });
@@ -706,7 +706,7 @@ function ParcelApiLayer({
           }
           const layer = L.geoJSON(geojson, {
             style: () => parcelStyle,
-            onEachFeature: (feature, leafletLayer) => {
+            onEachFeature: (feature: GeoJSON.Feature, leafletLayer: L.Layer) => {
               const props = (feature.properties || {}) as Record<string, unknown>;
               const content = formatParcelApiPopup(props);
               leafletLayer.bindPopup(content, { maxWidth: 320 });
