@@ -24,7 +24,10 @@ import {
   TableCell,
   TableBody,
   TableFooter,
+  Autocomplete,
+  Checkbox,
 } from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import InfoIcon from '@mui/icons-material/Info';
@@ -50,8 +53,220 @@ const FLOOD_ZONES = {
 
 type FloodZoneValues = (typeof FLOOD_ZONES)[keyof typeof FLOOD_ZONES];
 
+function waterWellLabel(v: string): string {
+  if (v === 'true') return 'Yes';
+  if (v === 'false') return 'No';
+  if (v === 'confirm') return 'Need to confirm';
+  if (v === 'city_water') return 'City water available';
+  return '___________________';
+}
+
+function septicTankLabel(v: string): string {
+  if (v === 'true') return 'Yes';
+  if (v === 'false') return 'No';
+  if (v === 'confirm') return 'Need to confirm';
+  if (v === 'city_sewer') return 'City Sewer available';
+  return '___________________';
+}
+
+function parseWaterWellFromText(lowerLine: string): string | undefined {
+  if (lowerLine.includes('city water')) return 'city_water';
+  if (lowerLine.includes('well needed') || lowerLine.includes('needs water well') || lowerLine.includes('no water')) {
+    return 'true';
+  }
+  return undefined;
+}
+
+function parseSepticFromText(lowerLine: string): string | undefined {
+  if (lowerLine.includes('city sewer')) return 'city_sewer';
+  if (lowerLine.includes('septic') || lowerLine.includes('sewage')) return 'true';
+  return undefined;
+}
+
+function detectFloodZoneFromLine(lowerLine: string): FloodZoneValues | null {
+  const mentionsFlood =
+    lowerLine.includes('flood') || lowerLine.includes('floodplain') || lowerLine.includes('flood zone');
+  if (!mentionsFlood) return null;
+  if (lowerLine.includes('coastal') && lowerLine.includes('way')) return FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
+  if (lowerLine.includes('coastal')) return FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
+  if (lowerLine.includes('500')) return FLOOD_ZONES.FIVE_HUNDRED_YEAR;
+  if (lowerLine.includes('clear')) return FLOOD_ZONES.CLEAR;
+  if (lowerLine.includes('undetermined')) return FLOOD_ZONES.UNDETERMINED;
+  if (lowerLine.includes('way')) return FLOOD_ZONES.HUNDRED_YEAR_WAY;
+  if (lowerLine.includes('100')) return FLOOD_ZONES.HUNDRED_YEAR;
+  return FLOOD_ZONES.UNDETERMINED;
+}
+
+function appendUniqueFloodZone(zones: FloodZoneValues[], zone: FloodZoneValues): FloodZoneValues[] {
+  return zones.includes(zone) ? zones : [...zones, zone];
+}
+
+function formatFloodZonesForCopy(zones: FloodZoneValues[]): string {
+  return zones.length > 0 ? zones.join('; ') : '';
+}
+
+function treeDensityDisplay(v: string): string {
+  if (v === 'none') return 'None';
+  if (v === 'moderate') return 'Moderate';
+  if (v === 'heavy') return 'Heavy';
+  return v;
+}
+
+/** Date and time for copy template header (Regenerate template). */
+function formatReportDateTime(date: Date = new Date()): string {
+  return date.toLocaleString(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function parseTreeDensityFromLine(lowerLine: string): string | undefined {
+  if (!lowerLine.includes('tree') && !lowerLine.includes('forest') && !lowerLine.includes('tree density')) {
+    return undefined;
+  }
+  if (lowerLine.includes('heavy')) return 'heavy';
+  if (lowerLine.includes('moderate')) return 'moderate';
+  if (lowerLine.includes('none')) return 'none';
+  return undefined;
+}
+
+type ActiveListingTreeFloodFieldsProps = {
+  trees: string;
+  floodZones: FloodZoneValues[];
+  onTreesChange: (value: string) => void;
+  onFloodZonesChange: (zones: FloodZoneValues[]) => void;
+};
+
+const FLOOD_ZONE_OPTIONS = Object.values(FLOOD_ZONES);
+
+const ActiveListingTreeFloodFields: React.FC<ActiveListingTreeFloodFieldsProps> = ({
+  trees,
+  floodZones,
+  onTreesChange,
+  onFloodZonesChange,
+}) => (
+  <>
+    <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
+      <Typography component="label" variant="body2" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
+        Tree Density
+      </Typography>
+      <FormControl fullWidth size="small">
+        <Select
+          value={trees || ''}
+          onChange={(e) => onTreesChange(e.target.value)}
+          displayEmpty
+          renderValue={(v) => (v ? treeDensityDisplay(v) : 'Select tree density')}
+        >
+          <MenuItem value="">Select tree density</MenuItem>
+          <MenuItem value="none">None</MenuItem>
+          <MenuItem value="moderate">Moderate</MenuItem>
+          <MenuItem value="heavy">Heavy</MenuItem>
+        </Select>
+      </FormControl>
+    </Box>
+    <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(50% - 8px)' } }}>
+      <Typography component="label" variant="body2" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
+        Flood Zone (select all that apply)
+      </Typography>
+      <Autocomplete
+        multiple
+        disableCloseOnSelect
+        options={FLOOD_ZONE_OPTIONS}
+        value={floodZones}
+        onChange={(_, newZones) => onFloodZonesChange(newZones)}
+        getOptionLabel={(option) => option}
+        isOptionEqualToValue={(option, value) => option === value}
+        renderOption={(props, option, { selected }) => (
+          <li {...props} key={option}>
+            <Checkbox size="small" sx={{ mr: 1 }} checked={selected} />
+            {option}
+          </li>
+        )}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            size="small"
+            placeholder={floodZones.length ? '' : 'Select flood zone'}
+          />
+        )}
+      />
+    </Box>
+  </>
+);
+
+type WellSepticFieldsProps = {
+  needsWell: string;
+  needsSeptic: string;
+  onWellChange: (value: string) => void;
+  onSepticChange: (value: string) => void;
+};
+
+/** Active listing panels — theme-aware (avoids pale yellow + light text in dark mode). */
+const activeListingPanelSx = {
+  mt: 3,
+  bgcolor: (theme: Theme) =>
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.primary.main, 0.16)
+      : alpha(theme.palette.primary.main, 0.07),
+  border: '1px solid',
+  borderColor: (theme: Theme) =>
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.primary.main, 0.5)
+      : alpha(theme.palette.primary.main, 0.3),
+  color: 'text.primary',
+};
+
+const activeListingHeadingSx = { color: 'primary.main', fontWeight: 600 };
+
+const WellSepticFields: React.FC<WellSepticFieldsProps> = ({
+  needsWell,
+  needsSeptic,
+  onWellChange,
+  onSepticChange,
+}) => (
+  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, width: '100%' }}>
+    <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(50% - 8px)' } }}>
+      <FormControl component="fieldset">
+        <Typography variant="subtitle2">Needs Water Well</Typography>
+        <RadioGroup
+          row
+          sx={{ flexWrap: 'wrap', gap: 0.5 }}
+          value={needsWell}
+          onChange={(e) => onWellChange(e.target.value)}
+        >
+          <FormControlLabel value="true" control={<Radio size="small" />} label="Yes" />
+          <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+          <FormControlLabel value="city_water" control={<Radio size="small" />} label="City water available" />
+          <FormControlLabel value="confirm" control={<Radio size="small" />} label="Need to confirm" />
+        </RadioGroup>
+      </FormControl>
+    </Box>
+    <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(50% - 8px)' } }}>
+      <FormControl component="fieldset">
+        <Typography variant="subtitle2">Needs Septic Tank</Typography>
+        <RadioGroup
+          row
+          sx={{ flexWrap: 'wrap', gap: 0.5 }}
+          value={needsSeptic}
+          onChange={(e) => onSepticChange(e.target.value)}
+        >
+          <FormControlLabel value="true" control={<Radio size="small" />} label="Yes" />
+          <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+          <FormControlLabel value="city_sewer" control={<Radio size="small" />} label="City Sewer available" />
+          <FormControlLabel value="confirm" control={<Radio size="small" />} label="Need to confirm" />
+        </RadioGroup>
+      </FormControl>
+    </Box>
+  </Box>
+);
+
 const DEFAULT_COPY_TEMPLATE =
-  `Subject Property: ___________________
+  `Today's Date: ___________________
+Subject Property: ___________________
 County Appraisal Value: ___________________
 Asking Price: ___________________
 Needs Water Well? ___________________
@@ -65,6 +280,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Sold Date: ___________________
 Sold Price: $ ___________________
@@ -78,6 +295,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Sold Date: ___________________
 Sold Price: $ ___________________
@@ -91,6 +310,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Sold Date: ___________________
 Sold Price: $ ___________________
@@ -104,6 +325,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Sold Date: ___________________
 Sold Price: $ ___________________
@@ -117,6 +340,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Sold Date: ___________________
 Sold Price: $ ___________________
@@ -130,6 +355,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Active Listing Date: ___________________
 Asking Price: $ ___________________
@@ -143,6 +370,8 @@ MLS #: ___________________
 Sq Ft: ___________________
 Acres: ___________________
 Tree Density: ___________________
+Needs Water Well? ___________________
+Needs Septic Tank? ___________________
 Flood Zone: ___________________
 Active Listing Date: ___________________
 Asking Price: $ ___________________
@@ -327,9 +556,6 @@ export const LandCalculator: React.FC = () => {
       })
       .join('\n');
 
-    const wellSepticLabel = (v: string): string =>
-      v === 'true' ? 'Yes' : v === 'false' ? 'No' : v === 'confirm' ? 'Need to confirm' : '___________________';
-
     // Active listing derived values
     const activePricePerSqFt = (activeListingData.listPrice && activeListingData.squareFeet)
       ? parseFloat(activeListingData.listPrice) / parseFloat(activeListingData.squareFeet)
@@ -363,6 +589,41 @@ export const LandCalculator: React.FC = () => {
     }
     const sellerAskingSuffix = sellerAskingExtras.length > 0 ? ` (${sellerAskingExtras.join(', ')})` : '';
 
+    const hasText = (v: string | undefined | null): boolean =>
+      v != null && String(v).trim() !== '';
+
+    const compHasData = (c: typeof comp1Data): boolean =>
+      [
+        c.address,
+        c.mlsNumber,
+        c.squareFeet,
+        c.acres,
+        c.salePrice,
+        c.closeDate,
+        c.dom,
+        c.pricePerSqFt,
+        c.pricePerAcre,
+        c.trees,
+        c.needsWell,
+        c.needsSeptic,
+        c.floodZone,
+      ].some(hasText);
+
+    const activeListingHasData = (d: typeof activeListingData): boolean =>
+      d.floodZones.length > 0 ||
+      [
+        d.address,
+        d.mlsNumber,
+        d.squareFeet,
+        d.acres,
+        d.listPrice,
+        d.listDate,
+        d.daysOnMarket,
+        d.trees,
+        d.needsWell,
+        d.needsSeptic,
+      ].some(hasText);
+
     const compBlock = (comp: typeof comp1Data, num: number) =>
       `✅ COMP #${num}\n` +
       `Address: ${placeholder(comp.address)}\n` +
@@ -370,6 +631,8 @@ export const LandCalculator: React.FC = () => {
       `Sq Ft: ${placeholder(comp.squareFeet)}\n` +
       `Acres: ${placeholder(comp.acres)}\n` +
       `Tree Density: ${placeholder(comp.trees)}\n` +
+      `Needs Water Well? ${waterWellLabel(comp.needsWell)}\n` +
+      `Needs Septic Tank? ${septicTankLabel(comp.needsSeptic)}\n` +
       `Flood Zone: ${placeholder(comp.floodZone)}\n` +
       `Sold Date: ${placeholder(formatDateMMDDYYYY(comp.closeDate))}\n` +
       `Sold Price: $ ${placeholder(comp.salePrice ? fmtMoney(comp.salePrice) : '')}\n` +
@@ -388,8 +651,10 @@ export const LandCalculator: React.FC = () => {
       `MLS #: ${placeholder(data.mlsNumber)}\n` +
       `Sq Ft: ${placeholder(data.squareFeet)}\n` +
       `Acres: ${placeholder(data.acres)}\n` +
-      `Tree Density: ${placeholder(data.trees)}\n` +
-      `Flood Zone: ${placeholder(data.floodZone)}\n` +
+      `Tree Density: ${placeholder(data.trees ? treeDensityDisplay(data.trees) : '')}\n` +
+      `Needs Water Well? ${waterWellLabel(data.needsWell)}\n` +
+      `Needs Septic Tank? ${septicTankLabel(data.needsSeptic)}\n` +
+      `Flood Zone: ${placeholder(formatFloodZonesForCopy(data.floodZones))}\n` +
       `Active Listing Date: ${placeholder(formatDateMMDDYYYY(data.listDate))}\n` +
       `Asking Price: $ ${placeholder(data.listPrice ? fmtMoney(data.listPrice) : '')}\n` +
       `DOM: ${placeholder(data.daysOnMarket)}\n` +
@@ -397,21 +662,26 @@ export const LandCalculator: React.FC = () => {
       `Acres Asking Price: $ ${placeholder(pricePerAcre != null ? fmtMoneyNum(pricePerAcre) : '')}\n\n`;
 
     const fullSummary =
+      `Today's Date: ${formatReportDateTime()}\n` +
       `Subject Property: ${placeholder(address)}\n` +
       `County Appraisal Value: ${placeholder(appraisalValue ? fmtMoney(appraisalValue) : '')}\n` +
       `Asking Price: ${placeholder(baseValue ? fmtMoney(baseValue) : '')}\n` +
-      `Needs Water Well? ${wellSepticLabel(needsWell)}\n` +
-      `Needs Septic Tank? ${wellSepticLabel(needsSeptic)}\n` +
+      `Needs Water Well? ${waterWellLabel(needsWell)}\n` +
+      `Needs Septic Tank? ${septicTankLabel(needsSeptic)}\n` +
       `Acres / Sqft: ${subjectLotSize || '___________________'}\n` +
       `Tree Density: ${placeholder(trees)}\n` +
       `Flood Zone: ${placeholder(floodZone)}\n\n` +
-      `${compBlock(comp1Data, 1)}` +
-      `${compBlock(comp2Data, 2)}` +
-      `${compBlock(comp3Data, 3)}` +
-      `${compBlock(comp4Data, 4)}` +
-      `${compBlock(comp5Data, 5)}` +
-      activeListingBlock(activeListingData, 1, activePricePerSqFt, activePricePerAcre) +
-      activeListingBlock(activeListing2Data, 2, active2PricePerSqFt, active2PricePerAcre) +
+      comps
+        .map((comp, index) => ({ comp, num: index + 1 }))
+        .filter(({ comp }) => compHasData(comp))
+        .map(({ comp, num }) => compBlock(comp, num))
+        .join('') +
+      (activeListingHasData(activeListingData)
+        ? activeListingBlock(activeListingData, 1, activePricePerSqFt, activePricePerAcre)
+        : '') +
+      (activeListingHasData(activeListing2Data)
+        ? activeListingBlock(activeListing2Data, 2, active2PricePerSqFt, active2PricePerAcre)
+        : '') +
       `MARKET ANALYSIS\n` +
       `SQ FT Avg Sold Price: $ ${avgPricePerSqFt ? fmtTwoNum(avgPricePerSqFt) : '___________________'}\n` +
       `Acres Avg Sold Price: $ ${avgPricePerAcre ? fmtMoneyNum(avgPricePerAcre) : '___________________'}\n` +
@@ -515,7 +785,7 @@ export const LandCalculator: React.FC = () => {
     trees: '',
     needsWell: '',
     needsSeptic: '',
-    floodZone: '' as FloodZoneValues | '',
+    floodZones: [] as FloodZoneValues[],
     dom: '',
     pricePerSqFt: '',
     pricePerAcre: '',
@@ -655,7 +925,7 @@ export const LandCalculator: React.FC = () => {
     trees: '',
     needsWell: '',
     needsSeptic: '',
-    floodZone: '' as FloodZoneValues | '',
+    floodZones: [] as FloodZoneValues[],
     dom: '',
     pricePerSqFt: '',
     pricePerAcre: '',
@@ -773,8 +1043,8 @@ export const LandCalculator: React.FC = () => {
       let newDebrisLevel = '';
       let newSlope = '';
       let newTrees = '';
-      let hasWell = false;
-      let hasSeptic = false;
+      let parsedNeedsWell = '';
+      let parsedNeedsSeptic = '';
       let newFloodZone = '';
 
       lines.forEach(line => {
@@ -849,15 +1119,11 @@ export const LandCalculator: React.FC = () => {
           else if (lowerLine.includes('moderate')) newTrees = 'moderate';
         }
 
-        // Look for well information
-        if (lowerLine.includes('well needed') || lowerLine.includes('no water')) {
-          hasWell = true;
-        }
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) parsedNeedsWell = parsedWell;
 
-        // Look for septic information
-        if (lowerLine.includes('septic') || lowerLine.includes('sewage')) {
-          hasSeptic = true;
-        }
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) parsedNeedsSeptic = parsedSeptic;
 
         // Look for flood zone
         if (lowerLine.includes('flood')) {
@@ -913,8 +1179,8 @@ export const LandCalculator: React.FC = () => {
       setDebrisLevel(newDebrisLevel);
       setSlope(newSlope);
       setTrees(newTrees);
-      setNeedsWell(hasWell ? 'true' : 'false');
-      setNeedsSeptic(hasSeptic ? 'true' : 'false');
+      if (parsedNeedsWell) setNeedsWell(parsedNeedsWell);
+      if (parsedNeedsSeptic) setNeedsSeptic(parsedNeedsSeptic);
       setFloodZone(newFloodZone as FloodZoneValues);
 
       // Clear paste input and hide quick input section
@@ -1084,6 +1350,12 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
+
         // Look for flood zone information in the entire text
         if (lowerLine.includes('flood')) {
           if (lowerLine.includes('coastal') && lowerLine.includes('way')) {
@@ -1248,6 +1520,12 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
+
         // Look for flood zone information in the entire text
         if (lowerLine.includes('flood')) {
           if (lowerLine.includes('coastal') && lowerLine.includes('way')) {
@@ -1407,6 +1685,12 @@ export const LandCalculator: React.FC = () => {
           }
         }
 
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
+
         // Look for flood zone information in the entire text
         if (lowerLine.includes('flood')) {
           if (lowerLine.includes('coastal') && lowerLine.includes('way')) {
@@ -1495,6 +1779,10 @@ export const LandCalculator: React.FC = () => {
         if (lowerLine.includes('sp/sf:')) { const m = line.match(/SP\/SF:\s*\$?(\d+\.?\d*)/i); if (m) newData.pricePerSqFt = m[1]; }
         if (lowerLine.includes('sp/acr:')) { const m = line.match(/SP\/ACR:\s*\$?(\d{1,3}(?:,\d{3})*|\d+\.?\d*)/i); if (m) newData.pricePerAcre = m[1].replace(/,/g, ''); }
         if (lowerLine.includes('close date:')) { const m = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i); if (m) { const [mo, d, y] = m[1].split('/'); const yr = y.length === 2 ? `20${y}` : y; newData.closeDate = `${yr}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; } }
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
         if (lowerLine.includes('flood')) {
           if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
           else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
@@ -1569,6 +1857,10 @@ export const LandCalculator: React.FC = () => {
         if (lowerLine.includes('sp/sf:')) { const m = line.match(/SP\/SF:\s*\$?(\d+\.?\d*)/i); if (m) newData.pricePerSqFt = m[1]; }
         if (lowerLine.includes('sp/acr:')) { const m = line.match(/SP\/ACR:\s*\$?(\d{1,3}(?:,\d{3})*|\d+\.?\d*)/i); if (m) newData.pricePerAcre = m[1].replace(/,/g, ''); }
         if (lowerLine.includes('close date:')) { const m = line.match(/Close Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i); if (m) { const [mo, d, y] = m[1].split('/'); const yr = y.length === 2 ? `20${y}` : y; newData.closeDate = `${yr}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; } }
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
         if (lowerLine.includes('flood')) {
           if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
           else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
@@ -1610,7 +1902,7 @@ export const LandCalculator: React.FC = () => {
         trees: '',
         needsWell: '',
         needsSeptic: '',
-        floodZone: '' as FloodZoneValues | '',
+        floodZones: [] as FloodZoneValues[],
         dom: '',
         pricePerSqFt: '',
         pricePerAcre: '',
@@ -1926,34 +2218,18 @@ export const LandCalculator: React.FC = () => {
           else if (lowerLine.includes('moderate')) newData.slope = 'moderate';
         }
 
-        if (lowerLine.includes('tree') || lowerLine.includes('forest')) {
-          if (lowerLine.includes('heavy')) newData.trees = 'heavy';
-          else if (lowerLine.includes('moderate')) newData.trees = 'moderate';
-        }
+        const parsedTrees = parseTreeDensityFromLine(lowerLine);
+        if (parsedTrees) newData.trees = parsedTrees;
 
-        // Look for well information
-        if (lowerLine.includes('well needed') || lowerLine.includes('no water')) {
-          newData.needsWell = 'true';
-        }
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
 
-        // Look for septic information
-        if (lowerLine.includes('septic') || lowerLine.includes('sewage')) {
-          newData.needsSeptic = 'true';
-        }
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
 
-        // Look for flood zone
-        if (lowerLine.includes('flood')) {
-          if (lowerLine.includes('coastal') && lowerLine.includes('way')) {
-            newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
-          } else if (lowerLine.includes('coastal')) {
-            newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
-          } else if (lowerLine.includes('500')) {
-            newData.floodZone = FLOOD_ZONES.FIVE_HUNDRED_YEAR;
-          } else if (lowerLine.includes('way')) {
-            newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR_WAY;
-          } else {
-            newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR;
-          }
+        const floodZone = detectFloodZoneFromLine(lowerLine);
+        if (floodZone) {
+          newData.floodZones = appendUniqueFloodZone(newData.floodZones, floodZone);
         }
       }
 
@@ -1988,7 +2264,7 @@ export const LandCalculator: React.FC = () => {
       const lines = activeListing2PasteInput.split('\n');
       const newData = {
         acres: '', squareFeet: '', listPrice: '', address: '', mlsNumber: parseMLSFromHARText(activeListing2PasteInput) || '', debrisLevel: '', slope: '', trees: '', needsWell: '', needsSeptic: '',
-        floodZone: '' as FloodZoneValues | '', dom: '', pricePerSqFt: '', pricePerAcre: '', listDate: '', status: 'Active', daysOnMarket: ''
+        floodZones: [] as FloodZoneValues[], dom: '', pricePerSqFt: '', pricePerAcre: '', listDate: '', status: 'Active', daysOnMarket: ''
       };
       const extractValue = (line: string) => { const parts = line.split(':'); return parts.length > 1 ? parts[1].trim() : ''; };
       const extractPrice = (line: string) => { const m = line.match(/\$?\s*([\d,]+(?:\.\d{2})?)/); return m ? m[1].replace(/,/g, '') : ''; };
@@ -2066,12 +2342,18 @@ export const LandCalculator: React.FC = () => {
           const m = line.match(/LP\/Acre:\s*\$?([\d,]+\.?\d*)/);
           if (m) newData.pricePerAcre = m[1].replace(/,/g, '');
         }
-        if (lowerLine.includes('flood')) {
-          if (lowerLine.includes('coastal') && lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR_WAY;
-          else if (lowerLine.includes('coastal')) newData.floodZone = FLOOD_ZONES.COASTAL_HUNDRED_YEAR;
-          else if (lowerLine.includes('500')) newData.floodZone = FLOOD_ZONES.FIVE_HUNDRED_YEAR;
-          else if (lowerLine.includes('way')) newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR_WAY;
-          else newData.floodZone = FLOOD_ZONES.HUNDRED_YEAR;
+        const parsedTrees = parseTreeDensityFromLine(lowerLine);
+        if (parsedTrees) newData.trees = parsedTrees;
+
+        const parsedWell = parseWaterWellFromText(lowerLine);
+        if (parsedWell) newData.needsWell = parsedWell;
+
+        const parsedSeptic = parseSepticFromText(lowerLine);
+        if (parsedSeptic) newData.needsSeptic = parsedSeptic;
+
+        const floodZone = detectFloodZoneFromLine(lowerLine);
+        if (floodZone) {
+          newData.floodZones = appendUniqueFloodZone(newData.floodZones, floodZone);
         }
       }
       if (newData.listPrice && newData.acres && !newData.pricePerAcre) {
@@ -2272,35 +2554,12 @@ export const LandCalculator: React.FC = () => {
 
           {/* Additional Conditions */}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
-              <FormControl component="fieldset">
-                <Typography variant="subtitle2">Needs Water Well</Typography>
-                <RadioGroup
-                  row
-                  value={needsWell}
-                  onChange={(e) => setNeedsWell(e.target.value)}
-                >
-                  <FormControlLabel value="true" control={<Radio />} label="Yes" />
-                  <FormControlLabel value="false" control={<Radio />} label="No" />
-                  <FormControlLabel value="confirm" control={<Radio />} label="Need to confirm" />
-                </RadioGroup>
-              </FormControl>
-            </Box>
-
-            <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
-              <FormControl component="fieldset">
-                <Typography variant="subtitle2">Needs Septic Tank</Typography>
-                <RadioGroup
-                  row
-                  value={needsSeptic}
-                  onChange={(e) => setNeedsSeptic(e.target.value)}
-                >
-                  <FormControlLabel value="true" control={<Radio />} label="Yes" />
-                  <FormControlLabel value="false" control={<Radio />} label="No" />
-                  <FormControlLabel value="confirm" control={<Radio />} label="Need to confirm" />
-                </RadioGroup>
-              </FormControl>
-            </Box>
+            <WellSepticFields
+              needsWell={needsWell}
+              needsSeptic={needsSeptic}
+              onWellChange={setNeedsWell}
+              onSepticChange={setNeedsSeptic}
+            />
 
             <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
               <FormControl fullWidth>
@@ -2630,6 +2889,12 @@ export const LandCalculator: React.FC = () => {
                   </Select>
                 </FormControl>
               </Box>
+              <WellSepticFields
+                needsWell={comp1Data.needsWell}
+                needsSeptic={comp1Data.needsSeptic}
+                onWellChange={(value) => setComp1Data({ ...comp1Data, needsWell: value })}
+                onSepticChange={(value) => setComp1Data({ ...comp1Data, needsSeptic: value })}
+              />
             </Box>
           </Box>
         </Box>
@@ -2885,6 +3150,12 @@ export const LandCalculator: React.FC = () => {
                   </Select>
                 </FormControl>
               </Box>
+              <WellSepticFields
+                needsWell={comp2Data.needsWell}
+                needsSeptic={comp2Data.needsSeptic}
+                onWellChange={(value) => setComp2Data({ ...comp2Data, needsWell: value })}
+                onSepticChange={(value) => setComp2Data({ ...comp2Data, needsSeptic: value })}
+              />
             </Box>
           </Box>
         </Box>
@@ -3140,6 +3411,12 @@ export const LandCalculator: React.FC = () => {
                   </Select>
                 </FormControl>
               </Box>
+              <WellSepticFields
+                needsWell={comp3Data.needsWell}
+                needsSeptic={comp3Data.needsSeptic}
+                onWellChange={(value) => setComp3Data({ ...comp3Data, needsWell: value })}
+                onSepticChange={(value) => setComp3Data({ ...comp3Data, needsSeptic: value })}
+              />
             </Box>
           </Box>
         </Box>
@@ -3209,6 +3486,12 @@ export const LandCalculator: React.FC = () => {
                   </Select>
                 </FormControl>
               </Box>
+              <WellSepticFields
+                needsWell={comp4Data.needsWell}
+                needsSeptic={comp4Data.needsSeptic}
+                onWellChange={(value) => setComp4Data({ ...comp4Data, needsWell: value })}
+                onSepticChange={(value) => setComp4Data({ ...comp4Data, needsSeptic: value })}
+              />
             </Box>
           </Box>
         </Box>
@@ -3278,6 +3561,12 @@ export const LandCalculator: React.FC = () => {
                   </Select>
                 </FormControl>
               </Box>
+              <WellSepticFields
+                needsWell={comp5Data.needsWell}
+                needsSeptic={comp5Data.needsSeptic}
+                onWellChange={(value) => setComp5Data({ ...comp5Data, needsWell: value })}
+                onSepticChange={(value) => setComp5Data({ ...comp5Data, needsSeptic: value })}
+              />
             </Box>
           </Box>
         </Box>
@@ -3286,7 +3575,7 @@ export const LandCalculator: React.FC = () => {
 
         {/* Active Listing Section */}
         <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>
+          <Typography variant="h6" gutterBottom sx={activeListingHeadingSx}>
             🏠 Active Listing Analysis
           </Typography>
           <Typography variant="body2" color="text.secondary" paragraph>
@@ -3325,7 +3614,7 @@ export const LandCalculator: React.FC = () => {
               />
               <Button
                 variant="contained"
-                color="warning"
+                color="primary"
                 onClick={parseActiveListingInputData}
                 disabled={!activeListingPasteInput}
                 fullWidth
@@ -3343,7 +3632,7 @@ export const LandCalculator: React.FC = () => {
           {!showActiveListingQuickInput && (
             <Button
               variant="outlined"
-              color="warning"
+              color="primary"
               startIcon={<ContentPasteIcon />}
               onClick={() => setShowActiveListingQuickInput(true)}
             >
@@ -3353,7 +3642,7 @@ export const LandCalculator: React.FC = () => {
 
           {/* Active Listing Details Form */}
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom sx={{ color: 'warning.main' }}>
+            <Typography variant="subtitle1" gutterBottom sx={activeListingHeadingSx}>
               Active Listing Details
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -3434,30 +3723,42 @@ export const LandCalculator: React.FC = () => {
                   placeholder="MM/DD/YYYY"
                 />
               </Box>
+              <ActiveListingTreeFloodFields
+                trees={activeListingData.trees}
+                floodZones={activeListingData.floodZones}
+                onTreesChange={(value) => setActiveListingData({ ...activeListingData, trees: value })}
+                onFloodZonesChange={(zones) => setActiveListingData({ ...activeListingData, floodZones: zones })}
+              />
+              <WellSepticFields
+                needsWell={activeListingData.needsWell}
+                needsSeptic={activeListingData.needsSeptic}
+                onWellChange={(value) => setActiveListingData({ ...activeListingData, needsWell: value })}
+                onSepticChange={(value) => setActiveListingData({ ...activeListingData, needsSeptic: value })}
+              />
             </Box>
 
             {/* Active Listing Analysis Card */}
-            <Card variant="outlined" sx={{ mt: 3, bgcolor: '#fff3e0', border: '1px solid', borderColor: 'warning.main' }}>
+            <Card variant="outlined" sx={activeListingPanelSx}>
               <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>
+                <Typography variant="h6" gutterBottom sx={activeListingHeadingSx}>
                   Active Listing Analysis
                 </Typography>
                 {activeListingData.listPrice && activeListingData.acres && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.primary">
                       <strong>List Price per Acre:</strong> ${(() => {
                         const pricePerAcre = parseFloat(activeListingData.listPrice) / parseFloat(activeListingData.acres);
                         return pricePerAcre.toLocaleString(undefined, { maximumFractionDigits: 0 });
                       })()}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.primary">
                       <strong>List Price per Square Foot:</strong> ${(() => {
                         const pricePerSqFt = parseFloat(activeListingData.listPrice) / parseFloat(activeListingData.squareFeet);
                         return pricePerSqFt.toFixed(2);
                       })()}
                     </Typography>
                     {activeListingData.daysOnMarket && (
-                      <Typography variant="body2">
+                      <Typography variant="body2" color="text.primary">
                         <strong>Days on Market:</strong> {activeListingData.daysOnMarket} days
                       </Typography>
                     )}
@@ -3482,7 +3783,7 @@ export const LandCalculator: React.FC = () => {
 
         {/* Active Listing 2 Section */}
         <Box sx={{ mt: 4, pt: 4, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>
+          <Typography variant="h6" gutterBottom sx={activeListingHeadingSx}>
             🏠 Active Listing #2
           </Typography>
           <Collapse in={showActiveListing2QuickInput}>
@@ -3494,13 +3795,13 @@ export const LandCalculator: React.FC = () => {
               </Box>
               <Typography variant="body2" color="text.secondary" paragraph>Copy and paste active listing details from MLS.</Typography>
               <TextareaAutosize minRows={4} placeholder="Paste active listing details here..." value={activeListing2PasteInput} onChange={(e) => setActiveListing2PasteInput(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '8px', fontFamily: 'inherit', borderRadius: '4px', border: '1px solid #ccc' }} />
-              <Button variant="contained" color="warning" onClick={parseActiveListing2InputData} disabled={!activeListing2PasteInput} fullWidth>Parse Active Listing #2 Data</Button>
+              <Button variant="contained" color="primary" onClick={parseActiveListing2InputData} disabled={!activeListing2PasteInput} fullWidth>Parse Active Listing #2 Data</Button>
               {activeListing2ParseError && <Alert severity="error" sx={{ mt: 1 }}>{activeListing2ParseError}</Alert>}
             </Box>
           </Collapse>
-          {!showActiveListing2QuickInput && <Button variant="outlined" color="warning" startIcon={<ContentPasteIcon />} onClick={() => setShowActiveListing2QuickInput(true)}>Show Active Listing #2 Quick Input</Button>}
+          {!showActiveListing2QuickInput && <Button variant="outlined" color="primary" startIcon={<ContentPasteIcon />} onClick={() => setShowActiveListing2QuickInput(true)}>Show Active Listing #2 Quick Input</Button>}
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom sx={{ color: 'warning.main' }}>Active Listing #2 Details</Typography>
+            <Typography variant="subtitle1" gutterBottom sx={activeListingHeadingSx}>Active Listing #2 Details</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ flexGrow: 1, width: '100%' }}>
                 <TextField fullWidth label="Property Address" value={activeListing2Data.address} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, address: e.target.value })} placeholder="Enter the property address" />
@@ -3523,15 +3824,27 @@ export const LandCalculator: React.FC = () => {
               <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 'calc(33.33% - 8px)' } }}>
                 <TextField fullWidth label="List Date" value={activeListing2Data.listDate} onChange={(e) => setActiveListing2Data({ ...activeListing2Data, listDate: e.target.value })} placeholder="MM/DD/YYYY" />
               </Box>
+              <ActiveListingTreeFloodFields
+                trees={activeListing2Data.trees}
+                floodZones={activeListing2Data.floodZones}
+                onTreesChange={(value) => setActiveListing2Data({ ...activeListing2Data, trees: value })}
+                onFloodZonesChange={(zones) => setActiveListing2Data({ ...activeListing2Data, floodZones: zones })}
+              />
+              <WellSepticFields
+                needsWell={activeListing2Data.needsWell}
+                needsSeptic={activeListing2Data.needsSeptic}
+                onWellChange={(value) => setActiveListing2Data({ ...activeListing2Data, needsWell: value })}
+                onSepticChange={(value) => setActiveListing2Data({ ...activeListing2Data, needsSeptic: value })}
+              />
             </Box>
-            <Card variant="outlined" sx={{ mt: 3, bgcolor: '#fff3e0', border: '1px solid', borderColor: 'warning.main' }}>
+            <Card variant="outlined" sx={activeListingPanelSx}>
               <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>Active Listing #2 Analysis</Typography>
+                <Typography variant="h6" gutterBottom sx={activeListingHeadingSx}>Active Listing #2 Analysis</Typography>
                 {activeListing2Data.listPrice && activeListing2Data.acres && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="body2"><strong>List Price per Acre:</strong> ${(parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.acres)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Typography>
-                    <Typography variant="body2"><strong>List Price per Square Foot:</strong> ${activeListing2Data.squareFeet ? (parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.squareFeet)).toFixed(2) : '-'}</Typography>
-                    {activeListing2Data.daysOnMarket && <Typography variant="body2"><strong>Days on Market:</strong> {activeListing2Data.daysOnMarket} days</Typography>}
+                    <Typography variant="body2" color="text.primary"><strong>List Price per Acre:</strong> ${(parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.acres)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Typography>
+                    <Typography variant="body2" color="text.primary"><strong>List Price per Square Foot:</strong> ${activeListing2Data.squareFeet ? (parseFloat(activeListing2Data.listPrice) / parseFloat(activeListing2Data.squareFeet)).toFixed(2) : '-'}</Typography>
+                    {activeListing2Data.daysOnMarket && <Typography variant="body2" color="text.primary"><strong>Days on Market:</strong> {activeListing2Data.daysOnMarket} days</Typography>}
                   </Box>
                 )}
                 {(!activeListing2Data.listPrice || !activeListing2Data.acres) && <Typography variant="body2" color="text.secondary">Enter list price and acreage to see analysis.</Typography>}

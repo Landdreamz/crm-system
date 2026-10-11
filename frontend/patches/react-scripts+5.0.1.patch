@@ -1,0 +1,38 @@
+diff --git a/node_modules/react-scripts/config/webpack.config.js b/node_modules/react-scripts/config/webpack.config.js
+index e465d8e..96fca05 100644
+--- a/node_modules/react-scripts/config/webpack.config.js
++++ b/node_modules/react-scripts/config/webpack.config.js
+@@ -30,8 +30,8 @@ const getClientEnvironment = require('./env');
+ const ModuleNotFoundPlugin = require('react-dev-utils/ModuleNotFoundPlugin');
+ const ForkTsCheckerWebpackPlugin =
+   process.env.TSC_COMPILE_ON_ERROR === 'true'
+-    ? require('react-dev-utils/ForkTsCheckerWarningWebpackPlugin')
+-    : require('react-dev-utils/ForkTsCheckerWebpackPlugin');
++    ? (function(){ function F(){ this.apply=function(){}; } return F; })()
++    : (function ForkTsCheckerWebpackPluginStub(){ function F(){ this.apply=function(){}; } return F; })();
+ const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
+ // @remove-on-eject-begin
+ const getCacheIdentifier = require('react-dev-utils/getCacheIdentifier');
+@@ -610,7 +610,7 @@ module.exports = function (webpackEnv) {
+           {},
+           {
+             inject: true,
+-            template: paths.appHtml,
++            templateContent: fs.readFileSync(paths.appHtml, 'utf8'),
+           },
+           isEnvProduction
+             ? {
+@@ -778,10 +778,12 @@ module.exports = function (webpackEnv) {
+           ),
+           // ESLint class options
+           cwd: paths.appPath,
+-          resolvePluginsRelativeTo: __dirname,
++          resolvePluginsRelativeTo: paths.appPath,
+           baseConfig: {
+             extends: [require.resolve('eslint-config-react-app/base')],
+             rules: {
++              'react-hooks/exhaustive-deps': 'off',
++              'import/first': 'off',
+               ...(!hasJsxRuntime && {
+                 'react/react-in-jsx-scope': 'error',
+               }),

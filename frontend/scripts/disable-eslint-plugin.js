@@ -76,6 +76,30 @@ if (content.includes("require('react-dev-utils/ForkTsCheckerWebpackPlugin')") &&
   changed = true;
 }
 
+// 7. HtmlWebpackPlugin: inline index.html (templateContent) so the child compiler never
+//    resolves paths.appHtml on disk — fixes "Can't resolve .../public/index.html".
+//    (patch-package also ships this; this block catches fresh installs / drift.)
+const htmlInlineMarker = "templateContent: fs.readFileSync(paths.appHtml, 'utf8')";
+if (!content.includes(htmlInlineMarker)) {
+  const beforeHtml = content;
+  content = content.replace(
+    /(\n\s*inject:\s*true,\s*\n\s*)template:\s*paths\.appHtml,/,
+    "$1templateContent: fs.readFileSync(paths.appHtml, 'utf8'),"
+  );
+  if (content === beforeHtml) {
+    content = content.replace(
+      /\btemplate:\s*paths\.appHtml\b/g,
+      "templateContent: fs.readFileSync(paths.appHtml, 'utf8')"
+    );
+  }
+  if (content !== beforeHtml) changed = true;
+}
+if (content.includes('new HtmlWebpackPlugin(') && !content.includes(htmlInlineMarker)) {
+  console.error(
+    '[disable-eslint-plugin] HtmlWebpackPlugin is still using template: paths.appHtml. Run: npm install (applies patches/react-scripts+5.0.1.patch) or reinstall react-scripts.'
+  );
+}
+
 if (changed) {
   fs.writeFileSync(webpackPath, content);
   console.log('ESLint config fixed in react-scripts (plugins resolve from project root)');

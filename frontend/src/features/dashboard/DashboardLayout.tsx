@@ -31,6 +31,7 @@ import {
   NotificationsOutlined as NotificationsIcon,
   CalculateOutlined as CalculateIcon,
   LandscapeOutlined as LandIcon,
+  HomeOutlined as HouseIcon,
   MapOutlined as ParcelApiIcon,
   CodeOutlined as CodeIcon,
   Search as SearchIcon,
@@ -51,10 +52,12 @@ import Contacts, { loadContacts, saveContacts } from './components/Contacts';
 import Announcements from './components/Announcements';
 import AmortizationCalculator from './components/AmortizationCalculator';
 import { LandCalculator } from './components/LandCalculator';
+import { HouseCalculator } from './components/HouseCalculator';
 import TrainingResources from './components/TrainingResources';
 import MarketingChannel from './components/MarketingChannel';
 import AutomationWorkflows from './components/AutomationWorkflows';
 import AskAI from './components/AskAI';
+import ChatBots from './components/ChatBots';
 import PowerDialer from './components/PowerDialer';
 import MarketResearch from './components/MarketResearch';
 import PipelineManagement from './components/PipelineManagement';
@@ -392,12 +395,12 @@ function ParcelApiContent() {
   );
 }
 
-type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts' | 'Pipeline Management' | 'Calendar' | 'Tasks' | 'Settings' | 'Parcel API' | 'Announcements' | 'Amortization Calculator' | 'Land Evaluation Calculator' | 'Training & Resources' | 'Marketing Channel' | 'Automation & Workflows' | 'Ask A.I' | 'Power Dialer';
+type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts' | 'Pipeline Management' | 'Calendar' | 'Tasks' | 'Settings' | 'Parcel API' | 'Announcements' | 'Amortization Calculator' | 'Land Evaluation Calculator' | 'House Evaluation Calculator' | 'Training & Resources' | 'Marketing Channel' | 'Automation & Workflows' | 'Ask A.I' | 'Chat Bots' | 'Power Dialer';
 
 const CRM_ACTIVE_ID_KEY = 'crmActiveId';
 
 /** Shown in the sidebar; if this string is missing or old, the browser is not loading the latest JS. */
-const UI_BUILD_STAMP = '2025-03-21d';
+const UI_BUILD_STAMP = '2026-10-10-land-util';
 
 export type CrmId = 'acq' | 'dispo';
 
@@ -449,6 +452,7 @@ const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{
 
 const MENU_ITEMS: { text: Section; icon: React.ReactNode }[] = [
   { text: 'Land Evaluation Calculator', icon: <LandIcon /> },
+  { text: 'House Evaluation Calculator', icon: <HouseIcon /> },
   { text: 'Amortization Calculator', icon: <CalculateIcon /> },
   { text: 'Contacts', icon: <ContactsIcon /> },
   { text: 'Pipeline Management', icon: <PipelineIcon /> },
@@ -460,6 +464,7 @@ const MENU_ITEMS: { text: Section; icon: React.ReactNode }[] = [
   { text: 'Automation & Workflows', icon: <AutomationIcon /> },
   { text: 'Power Dialer', icon: <PhoneIcon /> },
   { text: 'Ask A.I', icon: <AIIcon /> },
+  { text: 'Chat Bots', icon: <AIIcon /> },
   { text: 'Announcements', icon: <NotificationsIcon /> },
   { text: 'Training & Resources', icon: <TrainingIcon /> },
   { text: 'Tasks', icon: <TaskIcon /> },
@@ -570,6 +575,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
         return <PowerDialer contacts={contacts} />;
       case 'Ask A.I':
         return <AskAI />;
+      case 'Chat Bots':
+        return <ChatBots />;
       case 'Contacts':
         return (
           <Contacts
@@ -598,6 +605,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
         return <AmortizationCalculator />;
       case 'Land Evaluation Calculator':
         return <LandCalculator />;
+      case 'House Evaluation Calculator':
+        return <HouseCalculator />;
       case 'Training & Resources':
         return <TrainingResources />;
       case 'Tasks':
