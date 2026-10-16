@@ -30,6 +30,7 @@ import {
   TaskOutlined as TaskIcon,
   NotificationsOutlined as NotificationsIcon,
   CalculateOutlined as CalculateIcon,
+  TravelExploreOutlined as TerraScoutIcon,
   LandscapeOutlined as LandIcon,
   HomeOutlined as HouseIcon,
   MapOutlined as ParcelApiIcon,
@@ -51,6 +52,7 @@ import DealDesk from './components/DealDesk';
 import Contacts, { loadContacts, saveContacts } from './components/Contacts';
 import Announcements from './components/Announcements';
 import AmortizationCalculator from './components/AmortizationCalculator';
+import TerraScoutXTab from './components/TerraScoutXTab';
 import { LandCalculator } from './components/LandCalculator';
 import { HouseCalculator } from './components/HouseCalculator';
 import TrainingResources from './components/TrainingResources';
@@ -395,12 +397,12 @@ function ParcelApiContent() {
   );
 }
 
-type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts' | 'Pipeline Management' | 'Calendar' | 'Tasks' | 'Settings' | 'Parcel API' | 'Announcements' | 'Amortization Calculator' | 'Land Evaluation Calculator' | 'House Evaluation Calculator' | 'Training & Resources' | 'Marketing Channel' | 'Automation & Workflows' | 'Ask A.I' | 'Chat Bots' | 'Power Dialer';
+type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts' | 'Pipeline Management' | 'Calendar' | 'Tasks' | 'Settings' | 'Parcel API' | 'Announcements' | 'Amortization Calculator' | 'Terra Scout X' | 'Land Evaluation Calculator' | 'House Evaluation Calculator' | 'Training & Resources' | 'Marketing Channel' | 'Automation & Workflows' | 'Ask A.I' | 'Chat Bots' | 'Power Dialer';
 
 const CRM_ACTIVE_ID_KEY = 'crmActiveId';
 
 /** Shown in the sidebar; if this string is missing or old, the browser is not loading the latest JS. */
-const UI_BUILD_STAMP = '2026-10-15-tsx';
+const UI_BUILD_STAMP = '2026-10-15-tsx-nav';
 
 export type CrmId = 'acq' | 'dispo';
 
@@ -454,6 +456,7 @@ const MENU_ITEMS: { text: Section; icon: React.ReactNode }[] = [
   { text: 'Land Evaluation Calculator', icon: <LandIcon /> },
   { text: 'House Evaluation Calculator', icon: <HouseIcon /> },
   { text: 'Amortization Calculator', icon: <CalculateIcon /> },
+  { text: 'Terra Scout X', icon: <TerraScoutIcon /> },
   { text: 'Contacts', icon: <ContactsIcon /> },
   { text: 'Pipeline Management', icon: <PipelineIcon /> },
   { text: 'Calendar', icon: <CalendarIcon /> },
@@ -603,6 +606,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ onLogout }) => {
         return <Announcements />;
       case 'Amortization Calculator':
         return <AmortizationCalculator />;
+      case 'Terra Scout X':
+        return <TerraScoutXTab />;
       case 'Land Evaluation Calculator':
         return <LandCalculator />;
       case 'House Evaluation Calculator':
