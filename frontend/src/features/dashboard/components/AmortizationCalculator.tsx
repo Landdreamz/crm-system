@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   Box,
   Paper,
+  Tab,
+  Tabs,
   TextField,
   Button,
   Typography,
@@ -14,6 +16,9 @@ import {
   Grid,
   InputAdornment,
 } from '@mui/material';
+import CalculateIcon from '@mui/icons-material/Calculate';
+import TravelExploreIcon from '@mui/icons-material/TravelExplore';
+import TerraScoutXTab from './TerraScoutXTab';
 import { styled } from '@mui/material/styles';
 import {
   LineChart,
@@ -96,7 +101,10 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   );
 }
 
+type AmortizationTab = 'calculator' | 'terra-scout-x';
+
 const AmortizationCalculator: React.FC = () => {
+  const [tab, setTab] = useState<AmortizationTab>('calculator');
   const [purchasePrice, setPurchasePrice] = useState<string>('');
   const [downPayment, setDownPayment] = useState<string>('');
   const [loanAmount, setLoanAmount] = useState<string>('');
@@ -167,6 +175,22 @@ const AmortizationCalculator: React.FC = () => {
 
   return (
     <Box>
+      <Paper sx={{ mb: 3 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, value: AmortizationTab) => setTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
+        >
+          <Tab icon={<CalculateIcon />} iconPosition="start" label="Amortization" value="calculator" />
+          <Tab icon={<TravelExploreIcon />} iconPosition="start" label="Terra Scout X" value="terra-scout-x" />
+        </Tabs>
+      </Paper>
+
+      {tab === 'terra-scout-x' && <TerraScoutXTab />}
+
+      {tab === 'calculator' && (
       <StyledPaper>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           Loan amortization calculator
@@ -448,6 +472,7 @@ const AmortizationCalculator: React.FC = () => {
           </>
         )}
       </StyledPaper>
+      )}
     </Box>
   );
 };

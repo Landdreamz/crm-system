@@ -400,7 +400,7 @@ type Section = 'Sales Performance' | 'Deal Desk' | 'Market Research' | 'Contacts
 const CRM_ACTIVE_ID_KEY = 'crmActiveId';
 
 /** Shown in the sidebar; if this string is missing or old, the browser is not loading the latest JS. */
-const UI_BUILD_STAMP = '2026-10-10-land-util';
+const UI_BUILD_STAMP = '2026-10-15-tsx';
 
 export type CrmId = 'acq' | 'dispo';
 
